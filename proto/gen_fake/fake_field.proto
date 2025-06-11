@@ -1,0 +1,43 @@
+// Copyright 2025 Mike Williamson. All rights reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto3";
+package gen_fake;
+
+import "google/protobuf/descriptor.proto";
+
+// Message containing options to specify how fake data should be generated to represent
+// the field.
+// For example, if you have a field called "id" which represents a user ID specified
+// by email address, you might provide something like the following in your proto file:
+//      message User {
+//        string id = 1 [(gen_fake.field).data_type = "SafeEmail"];
+//        string name = 2 [(gen_fake.field).data_type = "FirstName"];
+//        string family_name = 3 [(gen_fake.field).data_type = "LastName"];
+//      }
+// where "SafeEmail", "FirstName", and "LastName" are all commands provided by the
+// `fake` library (crate). See https://crates.io/crates/fake for more information.
+message FakeDataFieldOption {
+  // A string providing the type of fake data to generate for the field.
+  // This plugin uses the Rust `fake` library (crate) to generate fake data, and for
+  // simplicity matches 1:1 the commands that the library provides as its CLI
+  // commands. For example, "CItyPrefix", "Isbn", "FilePath", etc.
+  // See https://crates.io/crates/fake for more information.
+  string data_type = 1;
+}
+
+extend google.protobuf.FieldOptions {
+  // Fake data generation options
+  FakeDataFieldOption field = 1491;
+}

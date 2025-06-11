@@ -1,0 +1,16 @@
+[package]
+name = "protoc-gen-fake"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+env_logger = "0.11.8"
+# fake = "4.3.0"
+# [dependencies]
+fake = {version = "4.3.0", features = ["derive", "chrono", "uuid"] }
+log = "0.4.27"
+protobuf = "3.7.2"
+rand = "0.9.1"
+
+[build-dependencies]
+protobuf-codegen = "3.7.2"
