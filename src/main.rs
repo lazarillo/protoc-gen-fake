@@ -406,131 +406,130 @@
 
 use prost::Message;
 use std::collections::HashSet;
-use std::error::Error;
 use std::io::{self, Read, Write};
 
-// IMPORT FROM `prost_types` for Google's well-known Protobuf types.
-// This crate provides pre-generated Rust types for descriptor.proto and plugin.proto,
-// removing the need to compile them directly in your build.rs.
-use prost_types::{
-    FieldOptions,        // Options for a field, which you are extending
-    FileDescriptorProto, // Describes a .proto file
-    compiler::{
-        CodeGeneratorRequest, // The main input message from protoc
-        CodeGeneratorResponse,
-    }, // The main output message to protoc
-    field_options::CType, // An enum related to FieldOptions, re-exported if needed
-};
+use prost_types::compiler::{CodeGeneratorRequest, CodeGeneratorResponse};
+use prost_types::{FieldOptions, FileDescriptorProto, UninterpretedOption};
 
-// Include the prost-generated code for your custom options.
-// This path corresponds to the `out_dir` and package structure defined in your build.rs.
-// The `gen_fake` module comes from `package gen_fake;` in your .proto file,
-// and `options` is a sub-module likely created by prost for extensions.
 #[allow(clippy::derive_partial_eq_without_eq)]
 pub mod gen_fake {
-    pub mod options {
-        include!(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/src/prost_generated/gen_fake.rs"
-        ));
-    }
+    include!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/src/prost_generated/gen_fake.rs"
+    ));
 }
 
-// Import your specific custom option message and its extension accessor function.
-use gen_fake::options::{FakeDataFieldOption, field_exts};
-use gen_fake::
-
-use gen_fake::exts; // Import the extension accessor function
+use gen_fake::FakeDataFieldOption;
 
 fn main() -> io::Result<()> {
-    // Initialize logging for better debugging output.
-    // Ensure you have `log` and `env_logger` in your Cargo.toml dependencies.
-    env_logger::init();
+    env_logger::init(); // RUST_LOG=debug or RUST_LOG=trace to see output
 
-    // Read the CodeGeneratorRequest binary data from stdin.
-    // This is how `protoc` communicates the .proto file information to your plugin.
     let mut buffer = Vec::new();
     io::stdin().read_to_end(&mut buffer)?;
 
-    // Decode the binary buffer into a strongly-typed CodeGeneratorRequest Rust struct.
-    // `prost::Message::decode` handles the deserialization.
     let request = CodeGeneratorRequest::decode(&*buffer)
         .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
 
-    // Create a HashSet for efficient lookup of the names of files that need to be generated.
-    // `request.file_to_generate` contains the explicit file paths passed to `protoc`.
     let files_to_generate: HashSet<&String> = request.file_to_generate.iter().collect();
 
-    // Initialize an empty CodeGeneratorResponse, which your plugin will populate
-    // with generated files and return to `protoc`.
     let mut response = CodeGeneratorResponse::default();
 
-    // Iterate through all FileDescriptorProto objects provided by `protoc`.
-    // `request.proto_file` contains descriptors for all input files, including dependencies.
     for file_descriptor in request.proto_file.into_iter() {
-        // Check if the file has a name (it should).
         if let Some(file_name) = &file_descriptor.name {
-            // Only process files that were explicitly requested for code generation.
             if files_to_generate.contains(file_name) {
                 log::info!("Processing primary file: {}", file_name);
 
-                // Iterate through each message type defined in the current .proto file.
                 for message_type in &file_descriptor.message_type {
                     log::info!(
                         "  Message: {}",
                         message_type.name.as_deref().unwrap_or("[Unnamed Message]")
                     );
 
-                    // Iterate through each field within the current message type.
                     for field in &message_type.field {
                         log::info!(
                             "    Field: {}",
                             field.name.as_deref().unwrap_or("[Unnamed Field]")
                         );
 
-                        // Check if the field has any options associated with it.
                         if let Some(options) = &field.options {
-                            // Attempt to get your custom extension.
-                            // `options.get_extension(field_exts::field)` uses the generated
-                            // accessor function (`field_exts::field`) to retrieve an
-                            // `Option<&FakeDataFieldOption>`.
-                            if let Some(fake_data_option) = options.get_extension(field_exts::field)
-                            {
-                                log::info!(
-                                    "      Found custom FakeDataFieldOption on field '{}': data_type = {}",
-                                    field.name.as_deref().unwrap_or(""),
-                                    fake_data_option.data_type // Access the `data_type` field of your custom option
+                            log::trace!(
+                                "    FieldOptions for '{}': {:?}",
+                                field.name.as_deref().unwrap_or(""),
+                                options
+                            );
+
+                            let mut found_custom_option = false;
+                            for uninterpreted_option in &options.uninterpreted_option {
+                                log::trace!(
+                                    "      UninterpretedOption found: {:?}",
+                                    uninterpreted_option
                                 );
-                            } else {
-                                log::debug!(
-                                    "      No FakeDataFieldOption found on field '{}'",
-                                    field.name.as_deref().unwrap_or("")
-                                );
+
+                                if uninterpreted_option.name.len() == 2
+                                    && uninterpreted_option.name[0].name_part == "gen_fake"
+                                    && uninterpreted_option.name[1].name_part == "field"
+                                {
+                                    log::debug!(
+                                        "      Identified potential custom option 'gen_fake.field'!"
+                                    );
+
+                                    // Let's try decoding from `string_value` first as `Vec<u8>`.
+                                    if let Some(value_bytes_vec) =
+                                        &uninterpreted_option.string_value
+                                    {
+                                        log::trace!(
+                                            "        string_value present, length: {}",
+                                            value_bytes_vec.len()
+                                        );
+                                        log::trace!(
+                                            "        string_value (hex): {:x?}",
+                                            value_bytes_vec
+                                        );
+
+                                        match FakeDataFieldOption::decode(value_bytes_vec.as_ref())
+                                        {
+                                            Ok(decoded_option) => {
+                                                log::info!(
+                                                    "      SUCCESS: Manually decoded custom FakeDataFieldOption for field '{}': data_type = {}",
+                                                    field.name.as_deref().unwrap_or(""),
+                                                    decoded_option.data_type
+                                                );
+                                                found_custom_option = true;
+                                                break;
+                                            }
+                                            Err(e) => {
+                                                log::error!(
+                                                    "      ERROR: Decoding FakeDataFieldOption from string_value failed for field '{}': {}",
+                                                    field.name.as_deref().unwrap_or(""),
+                                                    e
+                                                );
+                                            }
+                                        }
+                                    } else {
+                                        log::warn!(
+                                            "      Custom option 'gen_fake.field' found by name, but string_value (serialized message) is MISSING. Option: {:?}",
+                                            uninterpreted_option
+                                        );
+                                    }
+                                }
                             }
 
-                            // This loop checks for any truly "unknown" fields.
-                            // If your custom option is correctly defined and accessed via `get_extension`,
-                            // it should NOT appear in this `unknown_fields` iterator.
-                            for unknown in options.unknown_fields().iter() {
-                                log::warn!(
-                                    "      Unexpected Unknown field (key: {}): wire_type={:?}, bytes={:?}",
-                                    unknown.0,                 // The field tag number
-                                    unknown.1.wire_type(), // The wire type (e.g., LengthDelimited)
-                                    unknown.1.encode_to_vec() // The raw bytes of the unknown field's value
+                            if !found_custom_option {
+                                log::debug!(
+                                    "      No matching FakeDataFieldOption found or successfully decoded in uninterpreted_option for field '{}'",
+                                    field.name.as_deref().unwrap_or("")
                                 );
                             }
                         }
                     }
                 }
 
-                // Add a dummy generated file to the response for demonstration.
-                // In a real plugin, you would generate actual code based on the .proto content.
                 response
                     .file
-                    .push(prost_types::code_generator_response::File {
-                        name: Some(format!("{}.txt", file_name)), // Name of the generated file
-                        content: Some(format!("// Generated content for {}", file_name)), // Content of the generated file
-                        ..Default::default() // Use default for other fields (like insertion_point)
+                    .push(prost_types::compiler::code_generator_response::File {
+                        name: Some(format!("{}.txt", file_name)),
+                        content: Some(format!("// Generated content for {}", file_name)),
+                        ..Default::default()
                     });
             } else {
                 log::debug!("Skipping dependency/non-primary file: {}", file_name);
@@ -538,8 +537,6 @@ fn main() -> io::Result<()> {
         }
     }
 
-    // Encode the CodeGeneratorResponse back into binary format and write it to stdout.
-    // This is how your plugin sends its output back to `protoc`.
     let mut output_buffer = Vec::new();
     response.encode(&mut output_buffer)?;
     io::stdout().write_all(&output_buffer)?;
