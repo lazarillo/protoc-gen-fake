@@ -2,7 +2,7 @@ use prost_build::Config;
 use std::env;
 use std::error::Error;
 use std::io::Result as IoResult;
-use std::path::{Path, PathBuf}; // Add Path import // Alias Result to avoid conflict with std::result::Result
+use std::path::{Path, PathBuf};
 
 fn main() -> Result<(), Box<dyn Error>> {
     let proto_dir = "proto"; // Root of your .proto files
@@ -29,7 +29,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     // This part generates your `src/prost_generated/gen_fake.rs`
     let prost_generated_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR")?)
         .join("src")
-        .join("prost_generated");
+        .join("gen");
     std::fs::create_dir_all(&prost_generated_dir)?; // Ensure directory exists
 
     println!(
@@ -54,7 +54,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let descriptor_file_name = "file_descriptor_set.bin";
     let descriptor_full_path_buf = out_dir.join(descriptor_file_name); // This is a PathBuf
 
-    // CHANGE: Convert PathBuf to String, which explicitly implements Into<PathBuf>.
+    // Convert PathBuf to String, which explicitly implements Into<PathBuf>.
     // This is the most robust way to ensure the trait bound is satisfied in tricky cases.
     let descriptor_full_path_str = descriptor_full_path_buf
         .to_str()
@@ -68,6 +68,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let mut prost_reflect_config = Config::new();
     prost_reflect_config
+        // Pass the String directly, without `Some()`.
         .file_descriptor_set_path(descriptor_full_path_str)
         // Compile all protos that you need reflection for, including Google's,
         // because prost-reflect needs their schema definitions.
