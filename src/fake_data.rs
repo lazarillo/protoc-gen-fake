@@ -3,12 +3,13 @@ use fake::{
     faker::{
         address::en::*, administrative::en::*, automotive::en::*, barcode::en::*, boolean::en::*,
         chrono::en::*, company::en::*, creditcard::en::*, currency::en::*, filesystem::en::*,
-        finance::en::*, impls::*, internet::en::*, job::en::*, lorem::en::*, name::en::*,
+        finance::en::*, impls::*, internet::raw::*, job::en::*, lorem::raw::*, name::raw::*,
         number::en::*, phone_number::en::*,
     },
     locales::{Data, EN, FR_FR, PT_BR},
 };
-use rand::{Rng, rngs::ThreadRng}; // Import Rng for random number generation
+use rand::{Rng, rngs::ThreadRng};
+use std::fmt; // Import Display trait for formatting // Import Rng for random number generation
 
 // Define your comprehensive enum (no changes needed here)
 pub enum FakeData {
@@ -105,27 +106,99 @@ pub enum FakeData {
     Other(String), // For the default case
 }
 
-// Macro definition: 'echo_params!'
-// It takes three arguments: a literal string, an identifier, and an expression.
-// All arguments are separated by commas. The outer delimiters are parentheses ().
-macro_rules! echo_params {
-    ($message:literal, $tag:ident, $value:expr) => {
-        println!(
-            "ECHO: Message: {}, Tag: {}, Value: {}",
-            $message,
-            stringify!($tag),
-            $value
-        );
-    };
-}
-
-// Function that calls the 'echo_params!' macro
-fn demonstrate_echo_params() {
-    println!("\n--- Demonstrating echo_params! ---");
-    echo_params!("Hello World", item_name, 123);
-    echo_params!("Another string", some_id, 45.67);
-    echo_params!("Final message", status, true);
-    println!("--- End echo_params! Demo ---");
+impl fmt::Display for FakeData {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            FakeData::CityPrefix(s)
+            | FakeData::CitySuffix(s)
+            | FakeData::CityName(s)
+            | FakeData::CountryName(s)
+            | FakeData::CountryCode(s)
+            | FakeData::StreetSuffix(s)
+            | FakeData::StreetName(s)
+            | FakeData::TimeZone(s)
+            | FakeData::StateName(s)
+            | FakeData::StateAbbr(s)
+            | FakeData::SecondaryAddressType(s)
+            | FakeData::SecondaryAddress(s)
+            | FakeData::ZipCode(s)
+            | FakeData::PostCode(s)
+            | FakeData::BuildingNumber(s)
+            | FakeData::Latitude(s)
+            | FakeData::Longitude(s)
+            | FakeData::Geohash(s)
+            | FakeData::Isbn(s)
+            | FakeData::Isbn10(s)
+            | FakeData::Isbn13(s)
+            | FakeData::CreditCardNumber(s)
+            | FakeData::CompanySuffix(s)
+            | FakeData::CompanyName(s)
+            | FakeData::Buzzword(s)
+            | FakeData::BuzzwordMiddle(s)
+            | FakeData::BuzzwordTail(s)
+            | FakeData::CatchPhrase(s)
+            | FakeData::BsVerb(s)
+            | FakeData::BsAdj(s)
+            | FakeData::BsNoun(s)
+            | FakeData::Bs(s)
+            | FakeData::Profession(s)
+            | FakeData::Industry(s)
+            | FakeData::FreeEmailProvider(s)
+            | FakeData::DomainSuffix(s)
+            | FakeData::FreeEmail(s)
+            | FakeData::SafeEmail(s)
+            | FakeData::Username(s)
+            | FakeData::Password(s)
+            | FakeData::IPv4(s)
+            | FakeData::IPv6(s)
+            | FakeData::IP(s)
+            | FakeData::MACAddress(s)
+            | FakeData::UserAgent(s)
+            | FakeData::Seniority(s)
+            | FakeData::Field(s)
+            | FakeData::Position(s)
+            | FakeData::Word(s)
+            | FakeData::Sentence(s)
+            | FakeData::FirstName(s)
+            | FakeData::LastName(s)
+            | FakeData::Title(s)
+            | FakeData::Suffix(s)
+            | FakeData::Name(s)
+            | FakeData::NameWithTitle(s)
+            | FakeData::PhoneNumber(s)
+            | FakeData::CellNumber(s)
+            | FakeData::FilePath(s)
+            | FakeData::FileName(s)
+            | FakeData::FileExtension(s)
+            | FakeData::DirPath(s)
+            | FakeData::MimeType(s)
+            | FakeData::Semver(s)
+            | FakeData::SemverStable(s)
+            | FakeData::SemverUnstable(s)
+            | FakeData::CurrencyCode(s)
+            | FakeData::CurrencyName(s)
+            | FakeData::CurrencySymbol(s)
+            | FakeData::Bic(s)
+            | FakeData::Isin(s)
+            | FakeData::HexColor(s)
+            | FakeData::RgbColor(s)
+            | FakeData::RgbaColor(s)
+            | FakeData::HslColor(s)
+            | FakeData::HslaColor(s)
+            | FakeData::Color(s)
+            | FakeData::Time(s)
+            | FakeData::Date(s)
+            | FakeData::DateTime(s)
+            | FakeData::RfcStatusCode(s)
+            | FakeData::ValidStatusCode(s)
+            | FakeData::Paragraph(s)
+            | FakeData::Other(s) => write!(f, "{}", s),
+            FakeData::Age(i) => write!(f, "{}", i),
+            FakeData::Words(v) | FakeData::Sentences(v) | FakeData::Paragraphs(v) => {
+                write!(f, "{:?}", v)
+            }
+        }
+    }
 }
 
 macro_rules! generate_faker_match_arms {
@@ -142,7 +215,7 @@ macro_rules! generate_faker_match_arms {
             $(
                 $string_key_no_arg => Some(
                     FakeData::$enum_variant_no_arg(
-                    ($faker_path_no_arg)().fake_with_rng(&mut ThreadRng::default())
+                    ($faker_path_no_arg)($locale_var).fake_with_rng(&mut ThreadRng::default())
                     )
                 ),
             )*
@@ -150,23 +223,13 @@ macro_rules! generate_faker_match_arms {
             $(
                 $string_key_arg => Some(
                     FakeData::$enum_variant_arg(
-                        ($faker_path_arg)($arg_expr).fake_with_rng(&mut ThreadRng::default())
+                        ($faker_path_arg)($locale_var, $arg_expr).fake_with_rng(&mut ThreadRng::default())
                     )
                 ),
             )*
             _ => None, // Fallback if no specific faker matches
         }
     };
-}
-
-pub fn testing1() -> String {
-    FirstName().fake()
-    // FirstName().fake_with_rng(&mut ThreadRng::default())
-}
-
-pub fn testing2() -> String {
-    LastName().fake()
-    // FirstName().fake_with_rng(&mut ThreadRng::default())
 }
 
 pub fn get_fake_data<L>(data_type: &str, locale: L) -> FakeData
@@ -179,7 +242,8 @@ where
         // --- START OF FIRST LIST (Unit Struct Fakers - call method directly) ---
         [
             ("FirstName", FirstName, FirstName),
-            ("LastName", LastName, LastName)
+            ("LastName", LastName, LastName),
+            ("SafeEmail", SafeEmail, SafeEmail)
         ],
         // --- START OF SECOND LIST (Fakers with Range<usize> constructor arguments) ---
         [
@@ -311,8 +375,10 @@ where
 // }
 
 fn main() {
+    // SafeEmail().fake_with_rng(&mut ThreadRng::default());
+
     // Example usage with EN locale
-    let name_en = get_fake_data("Name", EN);
+    let name_en: FakeData = get_fake_data("Name", EN);
     match name_en {
         FakeData::Name(s) => println!("Generated Name (EN): {}", s),
         _ => unreachable!(),

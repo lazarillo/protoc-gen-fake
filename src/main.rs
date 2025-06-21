@@ -1,15 +1,19 @@
 use fake::Fake;
 use fake::faker::internet::en::SafeEmail;
 use fake::faker::name::en::{FirstName, LastName};
+use fake::locales::{EN, FR_FR, PT_BR};
 use protobuf::descriptor::{DescriptorProto, FieldDescriptorProto, FileDescriptorProto};
 use protobuf::plugin::{CodeGeneratorRequest, CodeGeneratorResponse};
 // use protobuf::reflect::FileDescriptor;
 use protobuf::{Message, MessageDyn, ext};
 use std::any::Any;
+use std::collections::HashSet;
 use std::io::{BufReader, Read, Write};
 
 mod generated_files_mod;
 use generated_files_mod::fake_field_generated::FakeDataFieldOption;
+
+use crate::fake_data::get_fake_data;
 
 mod fake_data;
 
@@ -180,6 +184,36 @@ fn generate_fake_data(message: &DescriptorProto) -> String {
     fake_data
 }
 
+// pub fn generate_py_init_files(
+//     file_descriptor: &FileDescriptorProto,
+//     opts: &Option<py_package::PyPackageOptions>,
+// ) -> impl Iterator<Item = File> {
+//     // Creates an iterator with 0 or 1 items based on whether `opts` is `Some` or `None`.
+//     opts
+//         // Using as_ref to convert the Option into an Option<&PyPackageOptions>.
+//         // This allows us to avoid moving the value out of the Option.
+//         .as_ref()
+//         .into_iter()
+//         .filter(|opt| opt.enable)
+//         // Using flat map to iterate over the option and generate an iterator of `File` objects.
+//         .flat_map(|opt| create_init_files(opt, file_descriptor))
+
+// }
+
+//     response.set_supported_features(CODE_GENERATOR_RESPONSE_FEATURE_PROTO3_OPTIONAL);
+//     let opts: Vec<(&FileDescriptorProto, Option<py_package::PyPackageOptions>)> = request
+//         .proto_file
+//         .iter()
+//         .map(|file| {
+//             let opts = py_package::exts::py_package_opts.get(&file.options);
+//             if let Some(opt) = &opts {
+//                 log::error!("Found py_package options in file: {}", file.name());
+//                 log::error!("Options: {:?}", opt);
+//             };
+//             (file, opts)
+//         })
+//         .collect();
+
 fn iter_proto(protos: Vec<&FileDescriptorProto>) -> Vec<String> {
     // let mut messages = Vec::new();
 
@@ -206,9 +240,54 @@ fn iter_proto(protos: Vec<&FileDescriptorProto>) -> Vec<String> {
     // response
 }
 
+// fn main() {
+//     // Read message from stdin
+//     let mut reader = BufReader::new(io::stdin());
+//     let mut incoming_request = Vec::new();
+//     reader.read_to_end(&mut incoming_request).unwrap();
+
+//     // Parse as a request
+//     let req = CodeGeneratorRequest::parse_from_bytes(&incoming_request).unwrap();
+
+//     // Generate the content for each output file
+//     let mut response = CodeGeneratorResponse::new();
+//     for proto_file in req.proto_file.iter() {
+//         let mut output = String::new();
+//         output.push_str(&format!("// from file: {:?}\n", &proto_file.name));
+//         output.push_str(&format!("// package: {:?}\n", &proto_file.package));
+//         for message in proto_file.message_type.iter() {
+//             output.push_str(&format!("\nmessage: {:?}\n", &message.name));
+//             for field in message.field.iter() {
+//                 output.push_str(&format!(
+//                     "- {:?} {:?} {:?}\n",
+//                     field.type_,
+//                     field.type_name,
+//                     field.name(),
+//                 ));
+//             }
+//         }
+
+//         // Add it to the response
+//         let mut output_file = code_generator_response::File::new();
+//         output_file.content = Some(output);
+//         output_file.name = Some(format!("{:?}/out.txt", &proto_file.name.as_ref().unwrap()));
+//         response.file.push(output_file);
+//     }
+
+//     // Serialize the response to binary message and return it
+//     let out_bytes: Vec<u8> = response.write_to_bytes().unwrap();
+//     io::stdout().write_all(&out_bytes).unwrap();
+// }
+
 fn main() {
     env_logger::init();
-    log::error!("Starting the protobuf code generator...");
+    log::error!("Starting the protobuf code generator...\n");
+    // let email_fr = get_fake_data("SafeEmail", FR_FR);
+    // log::error!("Fake French safe email: {}", email_fr);
+    // let name_en = get_fake_data("FirstName", EN);
+    // log::error!("Fake English first name: {}", name_en);
+    // let name_pt = get_fake_data("LastName", PT_BR);
+    // log::error!("Fake Portuguese last name: {}", name_pt);
     let mut request = CodeGeneratorRequest::new();
     request
         .merge_from_bytes(
@@ -219,11 +298,51 @@ fn main() {
                 .as_slice(),
         )
         .expect("Failed to parse proto file.");
-    let result = iter_proto(request.proto_file.iter().collect());
+    let files_of_interest: HashSet<&String> = request.file_to_generate.iter().collect();
+    let mut result = CodeGeneratorResponse::new();
+    for proto_file in request.proto_file.iter() {
+        if let Some(file_name) = &proto_file.name {
+            log::error!("Processing proto file: {}", file_name);
+            log::error!(
+                "    (From package: {}",
+                &proto_file.package.as_deref().unwrap_or_default()
+            );
+            log::error!("    with options: {:?}", &proto_file.options);
+            if files_of_interest.contains(file_name) {
+                log::error!("{} is a key file, looking at messages within...", file_name);
+                for message in proto_file.message_type.iter() {
+                    log::error!("Processing message: {:?}", &message.name);
+                    for field in message.field.iter() {
+                        log::error!(
+                            "Field: {:?} (type: {:?}, type_name: {:?})",
+                            &field.name,
+                            &field.type_,
+                            &field.type_name
+                        );
+                    }
+                }
+            }
+            log::error!("Done.\n");
+        }
+    }
 
-    std::io::stdout()
-        .write_all(&result.join("\n").as_bytes())
-        .unwrap();
+    //     let fake_data = iter_proto(vec![proto_file]);
+    //     log::error!("Generated fake data: {:?}", fake_data);
+    //     for data in fake_data {
+    //         result.file.push({
+    //             let mut file = protobuf::plugin::code_generator_response::File::new();
+    //             file.set_name(format!("{}.sql", proto_file.name));
+    //             file.set_content(data);
+    //             file
+    //         });
+    //     }
+    // }
+
+    // let result = iter_proto(request.proto_file.iter().collect());
+
+    // std::io::stdout()
+    //     .write_all(&result.join("\n").as_bytes())
+    //     .unwrap();
 }
 
 //     request
@@ -245,8 +364,8 @@ fn main() {
 //     response.set_supported_features(CODE_GENERATOR_FEATURE_PROTO3_OPTIONAL);
 //     for (file_name, mapping) in enums {
 //         let mut file = protobuf::plugin::code_generator_response::File::new();
-//         log::info!("File name: {}", file_name);
-//         log::info!("Mapping: {}", mapping);
+//         log::error!("File name: {}", file_name);
+//         log::error!("Mapping: {}", mapping);
 //         file.set_name(format!("{}.sql", file_name));
 //         file.set_content(mapping);
 //         response.file.push(file);
