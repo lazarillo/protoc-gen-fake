@@ -83,5 +83,12 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     println!("cargo:warning=Prost-reflect descriptor set generation complete");
 
+    // This makes the path available at compile time to your main crate.
+    println!(
+        "cargo:rustc-env=DESCRIPTOR_SET_BIN_PATH={}/{}",
+        out_dir.display(),
+        descriptor_file_name
+    );
+
     Ok(())
 }
