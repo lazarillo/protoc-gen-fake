@@ -6,7 +6,7 @@ use fake::{
         finance::en::*, impls::*, internet::raw::*, job::en::*, lorem::raw::*, name::raw::*,
         number::en::*, phone_number::en::*,
     },
-    locales::{Data, EN, FR_FR, PT_BR},
+    locales::{AR_SA, DE_DE, Data, EN, FR_FR, IT_IT, JA_JP, PT_BR, PT_PT, ZH_CN, ZH_TW},
 };
 use rand::{Rng, rngs::ThreadRng};
 use std::fmt; // Import Display trait for formatting // Import Rng for random number generation
@@ -372,6 +372,30 @@ where
 
 //     // Fallback for unknown data types
 //     FakeData::Other("Nothing".to_string())
+// }
+
+// pub enum LanguageLookup {
+//     Arabic(AR_SA),
+//     ChineseSimplified(ZH_CN),
+//     ChineseTraditional(ZH_TW),
+//     English(EN),
+//     French(FR_FR),
+//     German(DE_DE),
+//     Italian(IT_IT),
+//     Japanese(JA_JP),
+//     PortugueseBrazil(PT_BR),
+//     PortuguesePortugal(PT_PT),
+// }
+
+// fn get_lang(language: &str) -> Option<&'static dyn Locale> {
+//     // This function allows for a more flexible way to provide a language code
+//     let lower_lang = language.to_lowercase().as_str();
+//     match lower_lang {
+//         "en" => EN,
+//         "fr" => FR_FR,
+//         "pt_br" => PT_BR,
+//         _ => EN, // Default to English if the language is not recognized
+//     }
 // }
 
 fn main() {

@@ -4,12 +4,13 @@ package examples;
 import "gen_fake/fake_field.proto";
 
 message User {
-  string id = 1 [(gen_fake.field).data_type = "SafeEmail"];
-  string name = 2 [(gen_fake.field).data_type = "FirstName"];
-  string family_name = 3 [(gen_fake.field).data_type = "LastName"];
+  string id = 1 [(gen_fake.fake_data).data_type = "SafeEmail"];
+  string name = 2 [(gen_fake.fake_data) = {
+    data_type: "FirstName"
+    language: "FR_FR"
+  }];
+  string family_name = 3 [(gen_fake.fake_data) = {
+    data_type: "LastName"
+    language: "PT_BR"
+  }];
 }
-// message User {
-//   string id = 1 [(gen_fake.field) = {data_type: "SafeEmail"}];
-//   string name = 2 [(gen_fake.field) = {data_type: "FirstName"}];
-//   string family_name = 3 [(gen_fake.field) = {data_type: "LastName"}];
-// }

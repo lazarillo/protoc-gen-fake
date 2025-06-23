@@ -404,10 +404,11 @@
 // //     std::io::stdout().write_all(&output).unwrap();
 // // }
 
+use fake::locales::{EN, FR_FR, PT_BR};
 use protobuf::Message; // Import Message trait for parsing and serialization
 use std::collections::HashSet;
 use std::error::Error;
-use std::io::{self, Read, Write};
+use std::io::{self, Read, Write}; // Import locales for fake data generation
 
 // Corrected: CodeGeneratorRequest and CodeGeneratorResponse are in `protobuf::plugin`.
 use protobuf::plugin::{CodeGeneratorRequest, CodeGeneratorResponse};
@@ -423,12 +424,16 @@ pub mod gen_fake {
     include!("./gen/fake_field.rs"); // Path relative to `src/main.rs`
 }
 
+pub mod fake_data; // Import your fake data generation logic
+
 // Import your specific custom option message.
 use crate::gen_fake::FakeDataFieldOption;
 
 // Corrected: The `exts` module with your custom extension accessor (`field`)
 // is generated *inside* your `gen_fake` module (from `fake_field.rs`).
-use crate::gen_fake::exts::field; // Correct path to your custom extension accessor
+use crate::gen_fake::exts::fake_data; // Correct path to your custom extension accessor
+
+use crate::fake_data::get_fake_data; // Import your fake data generation logic
 
 fn main() -> io::Result<()> {
     // Initialize logging for better debugging output
@@ -445,19 +450,59 @@ fn main() -> io::Result<()> {
     let request = CodeGeneratorRequest::parse_from_bytes(&buffer)
         .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
 
-    // Log full request at TRACE level (only shows with RUST_LOG=trace)
-    log::trace!("Full CodeGeneratorRequest received: {:#?}", request);
+    // Log full request at DEBUG level (only shows with RUST_LOG=debug or lower)
+    log::debug!("Full CodeGeneratorRequest received: {:#?}", request);
 
     // Get the set of files to generate (explicitly requested by protoc)
-    let files_to_generate: HashSet<&String> = request.file_to_generate.iter().collect();
+    let key_files: HashSet<&String> = request.file_to_generate.iter().collect();
 
     let mut response = CodeGeneratorResponse::new(); // Use .new() for rust-protobuf messages
+
+    // Iterate through the key file(s) to use for generating fake data
+    // This is the main entry point for processing the request.
+    for &filename in key_files.iter() {
+        let file_descr = request
+            .proto_file
+            .iter()
+            .find(|f| f.name.as_deref() == Some(filename))
+            .unwrap_or_default();
+        log::info!(
+            "Processing file of interest: {}",
+            file_descr.name.as_deref().unwrap_or_default()
+        );
+        for message_descr in file_descr.message_type.iter() {
+            log::debug!(
+                "  Message: {}",
+                message_descr.name.as_deref().unwrap_or_default()
+            );
+            for field_descr in message_descr.field.iter() {
+                log::debug!(
+                    "    Field: {}",
+                    field_descr.name.as_deref().unwrap_or_default()
+                );
+                // Check if the field has options. In rust-protobuf 3.x, `options` is an Option<FieldOptions>.
+                if let Some(options) = field_descr.options.as_ref() {
+                    // Use `get` on the extension accessor directly, passing the `FieldOptions` reference.
+                    if let Some(fake_data_option) = fake_data.get(options) {
+                        let data_type = fake_data_option.data_type.as_str();
+                        let fake_value = get_fake_data(data_type, EN);
+                        log::info!(
+                            "      Field '{}' requested fake data generation of type '{}':  '{}'",
+                            field_descr.name.as_deref().unwrap_or_default(),
+                            data_type,
+                            fake_value
+                        )
+                    }
+                }
+            }
+        }
+    }
 
     // Iterate through all file descriptors in the request
     for file_descriptor in request.proto_file.iter() {
         if let Some(file_name) = file_descriptor.name.as_ref() {
             // Get &String from &Option<String>
-            if files_to_generate.contains(file_name) {
+            if key_files.contains(file_name) {
                 log::info!("Processing primary file: {}", file_name);
 
                 // Iterate through messages in the current file
@@ -481,7 +526,7 @@ fn main() -> io::Result<()> {
                         if let Some(options) = field_descriptor.options.as_ref() {
                             // Use `get` on the extension accessor directly, passing the `FieldOptions` reference.
                             // This should now correctly resolve and find your custom option.
-                            if let Some(fake_data_option) = field.get(options) {
+                            if let Some(fake_data_option) = fake_data.get(options) {
                                 log::info!(
                                     "      SUCCESS: Found custom FakeDataFieldOption on field '{}': data_type = {}",
                                     field_descriptor.name.as_deref().unwrap_or(""),

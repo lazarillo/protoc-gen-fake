@@ -35,9 +35,17 @@ message FakeDataFieldOption {
   // commands. For example, "CItyPrefix", "Isbn", "FilePath", etc.
   // See https://crates.io/crates/fake for more information.
   string data_type = 1;
+  // Optional language code. The `fake` library, which this plugin uses to generate
+  // fake data, defines languages "<LANGUAGE>_<COUNTRY>" using all uppercase, such as
+  // "FR_FR", "PT_BR", etc. It also uses only "EN" (no country). Info can be found
+  // here: https://docs.rs/fake/latest/fake/locales/index.html
+  // This plugin accepts the language as lowercase or uppercase, accepts just the
+  // 2-letter language code, or the actual word, but written in English. Therefore,
+  // "ZH_CN", "zh_CN", or "Chinese" are all valid values to represent Chinese.
+  string language = 2;
 }
 
 extend google.protobuf.FieldOptions {
   // Fake data generation options
-  FakeDataFieldOption field = 1491;
+  FakeDataFieldOption fake_data = 1491;
 }
