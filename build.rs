@@ -17,7 +17,6 @@ fn filter_attributes(input: &Path, output: &Path) -> io::Result<()> {
             filtered_lines.push(line);
         }
     }
-
     fs::write(output, filtered_lines.join("\n"))?;
     Ok(())
 }
@@ -29,15 +28,6 @@ fn main() -> Result<(), Box<dyn Error>> {
     // Tell Cargo to rerun this build script if any of the proto files change.
     println!(
         "cargo:rerun-if-changed={}/gen_fake/fake_field.proto",
-        proto_dir
-    );
-    println!("cargo:rerun-if-changed={}/examples/user.proto", proto_dir);
-    println!(
-        "cargo:rerun-if-changed={}/google/protobuf/descriptor.proto",
-        proto_dir
-    );
-    println!(
-        "cargo:rerun-if-changed={}/google/protobuf/compiler/plugin.proto",
         proto_dir
     );
 
@@ -62,15 +52,9 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     // Run protobuf_codegen to generate the .rs files into Cargo's OUT_DIR
     protobuf_codegen::Codegen::new()
-        .inputs(&[
-            format!("{}/gen_fake/fake_field.proto", proto_dir),
-            format!("{}/examples/user.proto", proto_dir),
-            format!("{}/google/protobuf/descriptor.proto", proto_dir),
-            format!("{}/google/protobuf/compiler/plugin.proto", proto_dir),
-        ])
+        .inputs(&[format!("{}/gen_fake/fake_field.proto", proto_dir)])
         .includes(&[proto_dir])
         .out_dir(&out_dir_cargo) // Generate to Cargo's OUT_DIR initially
-        .customize(protobuf_codegen::Customize::default().gen_mod_rs(false)) // Avoids gen_mod_rs
         .run_from_script();
 
     println!(
@@ -83,7 +67,8 @@ fn main() -> Result<(), Box<dyn Error>> {
         &src_gen_dir.join("fake_field.rs"),
     )?;
 
-    // Removed the copying of `user.rs` as the plugin will now use reflection.
+    // Post-process and copy the generated `mod.rs` file from OUT_DIR to src/gen/
+    filter_attributes(&out_dir_cargo.join("mod.rs"), &src_gen_dir.join("mod.rs"))?;
 
     Ok(())
 }
