@@ -404,7 +404,6 @@
 // //     std::io::stdout().write_all(&output).unwrap();
 // // }
 
-use fake::locales::{EN, FR_FR, PT_BR};
 use protobuf::Message; // Import Message trait for parsing and serialization
 use std::collections::HashSet;
 use std::error::Error;
@@ -472,12 +471,12 @@ fn main() -> io::Result<()> {
         );
         for message_descr in file_descr.message_type.iter() {
             log::debug!(
-                "  Message: {}",
+                " Message: {}",
                 message_descr.name.as_deref().unwrap_or_default()
             );
             for field_descr in message_descr.field.iter() {
                 log::debug!(
-                    "    Field: {}",
+                    "  Field: {}",
                     field_descr.name.as_deref().unwrap_or_default()
                 );
                 // Check if the field has options. In rust-protobuf 3.x, `options` is an Option<FieldOptions>.
@@ -485,79 +484,39 @@ fn main() -> io::Result<()> {
                     // Use `get` on the extension accessor directly, passing the `FieldOptions` reference.
                     if let Some(fake_data_option) = fake_data.get(options) {
                         let data_type = fake_data_option.data_type.as_str();
-                        let fake_value = get_fake_data(data_type, EN);
-                        log::info!(
-                            "      Field '{}' requested fake data generation of type '{}':  '{}'",
-                            field_descr.name.as_deref().unwrap_or_default(),
-                            data_type,
-                            fake_value
-                        )
-                    }
-                }
-            }
-        }
-    }
-
-    // Iterate through all file descriptors in the request
-    for file_descriptor in request.proto_file.iter() {
-        if let Some(file_name) = file_descriptor.name.as_ref() {
-            // Get &String from &Option<String>
-            if key_files.contains(file_name) {
-                log::info!("Processing primary file: {}", file_name);
-
-                // Iterate through messages in the current file
-                for message_type in file_descriptor.message_type.iter() {
-                    log::info!(
-                        "  Message: {}",
-                        message_type.name.as_deref().unwrap_or("[Unnamed Message]")
-                    );
-
-                    // Iterate through fields in the current message
-                    for field_descriptor in message_type.field.iter() {
-                        log::info!(
-                            "    Field: {}",
-                            field_descriptor
-                                .name
-                                .as_deref()
-                                .unwrap_or("[Unnamed Field]")
-                        );
-
-                        // Check if the field has options. In rust-protobuf 3.x, `options` is an Option<FieldOptions>.
-                        if let Some(options) = field_descriptor.options.as_ref() {
-                            // Use `get` on the extension accessor directly, passing the `FieldOptions` reference.
-                            // This should now correctly resolve and find your custom option.
-                            if let Some(fake_data_option) = fake_data.get(options) {
-                                log::info!(
-                                    "      SUCCESS: Found custom FakeDataFieldOption on field '{}': data_type = {}",
-                                    field_descriptor.name.as_deref().unwrap_or(""),
-                                    fake_data_option.data_type // Access the data_type field
-                                );
-                            } else {
-                                log::debug!(
-                                    "      No FakeDataFieldOption found via get_extension for field '{}'",
-                                    field_descriptor.name.as_deref().unwrap_or("")
-                                );
-                            }
+                        let language = fake_data_option.language.as_str();
+                        if let Some(fake_value) = get_fake_data(data_type, language) {
+                            log::info!(
+                                "  Field '{}' - fake data type '{}' in '{}':  '{}'",
+                                field_descr.name.as_deref().unwrap_or_default(),
+                                data_type,
+                                language,
+                                fake_value
+                            )
                         } else {
-                            // No options field on the FieldDescriptorProto
-                            log::debug!(
-                                "      Field '{}' has no options.",
-                                field_descriptor.name.as_deref().unwrap_or("")
-                            );
+                            log::info!(
+                                "  Field '{}' - requested fake data of type '{}' in '{}', but failed to generate it",
+                                field_descr.name.as_deref().unwrap_or_default(),
+                                data_type,
+                                language,
+                            )
                         }
                     }
                 }
-
-                // Add a dummy generated file to the response
-                let mut generated_file = protobuf::plugin::code_generator_response::File::new();
-                generated_file.set_name(format!("{}.txt", file_name));
-                generated_file.set_content(format!("// Generated content for {}", file_name));
-                response.file.push(generated_file);
-            } else {
-                log::debug!("Skipping dependency/non-primary file: {}", file_name);
             }
         }
     }
+
+    //             // Add a dummy generated file to the response
+    //             let mut generated_file = protobuf::plugin::code_generator_response::File::new();
+    //             generated_file.set_name(format!("{}.txt", file_name));
+    //             generated_file.set_content(format!("// Generated content for {}", file_name));
+    //             response.file.push(generated_file);
+    //         } else {
+    //             log::debug!("Skipping dependency/non-primary file: {}", file_name);
+    //         }
+    //     }
+    // }
 
     // Encode the CodeGeneratorResponse and write to stdout
     let mut output_buffer = Vec::new();

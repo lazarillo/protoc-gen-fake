@@ -202,12 +202,92 @@ impl fmt::Display for FakeData {
 }
 
 macro_rules! generate_faker_match_arms {
+    // Main entry point for the macro
+    // This macro generates match arms for different fakers based on the provided data type and language
     (
         $data_type_var:ident,
-        $locale_var:ident,
+        $language_var:ident,
         // List 1: All fakers that are functions and take NO arguments (e.g., FirstName(), City())
         [ $( ($string_key_no_arg:literal, $faker_path_no_arg:path, $enum_variant_no_arg:ident) ),* ],
         // List 2: All fakers that are functions and DO take arguments (e.g., Words(range), Password(len))
+        [ $( ($string_key_arg:literal, $faker_path_arg:path, $enum_variant_arg:ident, $arg_expr:expr) ),* ]
+    ) => {
+        // Outer match on language
+        match $language_var.to_lowercase().as_str() {
+            "ar_sa" | "ar" | "english" => {
+                // Call the internal rule, passing the concrete locale instance
+                generate_faker_match_arms!(@internal_faker_match $data_type_var, AR_SA,
+                    [ $( ($string_key_no_arg, $faker_path_no_arg, $enum_variant_no_arg) ),* ],
+                    [ $( ($string_key_arg, $faker_path_arg, $enum_variant_arg, $arg_expr) ),* ]
+                )
+            },
+            "de_de" | "de" | "german" => {
+                // Call the internal rule, passing the concrete locale instance
+                generate_faker_match_arms!(@internal_faker_match $data_type_var, DE_DE,
+                    [ $( ($string_key_no_arg, $faker_path_no_arg, $enum_variant_no_arg) ),* ],
+                    [ $( ($string_key_arg, $faker_path_arg, $enum_variant_arg, $arg_expr) ),* ]
+                )
+            },
+            "en" | "english" => {
+                // Call the internal rule, passing the concrete locale instance
+                generate_faker_match_arms!(@internal_faker_match $data_type_var, EN,
+                    [ $( ($string_key_no_arg, $faker_path_no_arg, $enum_variant_no_arg) ),* ],
+                    [ $( ($string_key_arg, $faker_path_arg, $enum_variant_arg, $arg_expr) ),* ]
+                )
+            },
+            "fr_fr" | "fr" | "french" => {
+                generate_faker_match_arms!(@internal_faker_match $data_type_var, FR_FR,
+                    [ $( ($string_key_no_arg, $faker_path_no_arg, $enum_variant_no_arg) ),* ],
+                    [ $( ($string_key_arg, $faker_path_arg, $enum_variant_arg, $arg_expr) ),* ]
+                )
+            },
+            "it_it" | "it" | "italian" => {
+                generate_faker_match_arms!(@internal_faker_match $data_type_var, IT_IT,
+                    [ $( ($string_key_no_arg, $faker_path_no_arg, $enum_variant_no_arg) ),* ],
+                    [ $( ($string_key_arg, $faker_path_arg, $enum_variant_arg, $arg_expr) ),* ]
+                )
+            },
+            "ja_jp" | "ja" | "japanese" => {
+                generate_faker_match_arms!(@internal_faker_match $data_type_var, JA_JP,
+                    [ $( ($string_key_no_arg, $faker_path_no_arg, $enum_variant_no_arg) ),* ],
+                    [ $( ($string_key_arg, $faker_path_arg, $enum_variant_arg, $arg_expr) ),* ]
+                )
+            },
+            "pt_br" | "pt" | "brazilian portuguese" => {
+                generate_faker_match_arms!(@internal_faker_match $data_type_var, PT_BR,
+                    [ $( ($string_key_no_arg, $faker_path_no_arg, $enum_variant_no_arg) ),* ],
+                    [ $( ($string_key_arg, $faker_path_arg, $enum_variant_arg, $arg_expr) ),* ]
+                )
+            },
+            "pt_pt"  | "portuguese" => {
+                generate_faker_match_arms!(@internal_faker_match $data_type_var, PT_PT,
+                    [ $( ($string_key_no_arg, $faker_path_no_arg, $enum_variant_no_arg) ),* ],
+                    [ $( ($string_key_arg, $faker_path_arg, $enum_variant_arg, $arg_expr) ),* ]
+                )
+            },
+            "zh_cn" | "zh" | "chinese" | "simplified chinese" => {
+                generate_faker_match_arms!(@internal_faker_match $data_type_var, ZH_CN,
+                    [ $( ($string_key_no_arg, $faker_path_no_arg, $enum_variant_no_arg) ),* ],
+                    [ $( ($string_key_arg, $faker_path_arg, $enum_variant_arg, $arg_expr) ),* ]
+                )
+            },
+            "zh_tw" | "taiwanese" | "traditional chinese" => {
+                generate_faker_match_arms!(@internal_faker_match $data_type_var, ZH_TW,
+                    [ $( ($string_key_no_arg, $faker_path_no_arg, $enum_variant_no_arg) ),* ],
+                    [ $( ($string_key_arg, $faker_path_arg, $enum_variant_arg, $arg_expr) ),* ]
+                )
+            },
+            // Add more language arms here for each locale you support
+            _ => None, // Fallback if the language_input itself is not recognized
+        }
+    };
+    // Internal match on the data type
+    // It is called by the outer rule, receiving the data_type_var, the concrete locale_instance,
+    // and the lists of fakers.
+    (@internal_faker_match
+        $data_type_var:ident,
+        $locale_instance:expr, // This is now the concrete locale (e.g., EN_US) passed from above
+        [ $( ($string_key_no_arg:literal, $faker_path_no_arg:path, $enum_variant_no_arg:ident) ),* ],
         [ $( ($string_key_arg:literal, $faker_path_arg:path, $enum_variant_arg:ident, $arg_expr:expr) ),* ]
     ) => {
         match $data_type_var {
@@ -215,7 +295,7 @@ macro_rules! generate_faker_match_arms {
             $(
                 $string_key_no_arg => Some(
                     FakeData::$enum_variant_no_arg(
-                    ($faker_path_no_arg)($locale_var).fake_with_rng(&mut ThreadRng::default())
+                    ($faker_path_no_arg)($locale_instance).fake_with_rng(&mut ThreadRng::default())
                     )
                 ),
             )*
@@ -223,22 +303,19 @@ macro_rules! generate_faker_match_arms {
             $(
                 $string_key_arg => Some(
                     FakeData::$enum_variant_arg(
-                        ($faker_path_arg)($locale_var, $arg_expr).fake_with_rng(&mut ThreadRng::default())
+                        ($faker_path_arg)($locale_instance, $arg_expr).fake_with_rng(&mut ThreadRng::default())
                     )
                 ),
             )*
-            _ => None, // Fallback if no specific faker matches
+            _ => None, // Fallback if no specific faker matches for this data_type
         }
     };
 }
 
-pub fn get_fake_data<L>(data_type: &str, locale: L) -> FakeData
-where
-    L: fake::locales::Data + Copy + 'static,
-{
+pub fn get_fake_data(data_type: &str, language: &str) -> Option<FakeData> {
     let result = generate_faker_match_arms!(
         data_type, // <<< FIX: Passing `data_type` as the first argument
-        locale,    // This is now the second argument (the locale variable)
+        language,  // This is now the second argument (the locale variable)
         // --- START OF FIRST LIST (Unit Struct Fakers - call method directly) ---
         [
             ("FirstName", FirstName, FirstName),
@@ -254,16 +331,14 @@ where
     );
 
     if let Some(data) = result {
-        return data;
+        return Some(data);
     }
 
     // Special handling for "Age" (not a fake crate faker)
     if data_type == "Age" {
-        return FakeData::Age(rand::rng().random_range(8..90));
+        return Some(FakeData::Age(rand::rng().random_range(8..90)));
     }
-
-    // Fallback for unknown data types
-    FakeData::Other("Nothing".to_string())
+    None
 }
 
 // pub fn get_fake_data<L>(data_type: &str, locale: L) -> FakeData
@@ -402,61 +477,49 @@ fn main() {
     // SafeEmail().fake_with_rng(&mut ThreadRng::default());
 
     // Example usage with EN locale
-    let name_en: FakeData = get_fake_data("Name", EN);
+    let name_en: Option<FakeData> = get_fake_data("FirstName", "English");
     match name_en {
-        FakeData::Name(s) => println!("Generated Name (EN): {}", s),
+        Some(s) => println!("Generated Name (EN): {}", s),
         _ => unreachable!(),
     }
 
-    let city_en = get_fake_data("CityName", EN);
+    let city_en = get_fake_data("CityName", "English");
     match city_en {
-        FakeData::CityName(s) => println!("Generated City (EN): {}", s),
-        _ => unreachable!(),
-    }
-
-    let words_en: FakeData = get_fake_data("Words", EN);
-    match words_en {
-        FakeData::Words(s) => println!("Generated Words (EN): {:?}", s),
-        _ => unreachable!(),
-    }
-
-    let age = get_fake_data("Age", EN);
-    match age {
-        FakeData::Age(a) => println!("Generated Age: {}", a),
+        Some(s) => println!("Generated City (EN): {}", s),
         _ => unreachable!(),
     }
 
     // Example usage with French locale
-    let name_fr = get_fake_data("Name", FR_FR);
+    let name_fr = get_fake_data("Name", "French");
     match name_fr {
-        FakeData::Name(s) => println!("Generated Name (FR_FR): {}", s),
+        Some(s) => println!("Generated Name (FR_FR): {}", s),
         _ => unreachable!(),
     }
 
-    let city_fr = get_fake_data("CityName", FR_FR);
-    match city_fr {
-        // Note: For FR, 'City' might give a French city name, even if imported from en::*
-        // This is the beauty of fake_with_context.
-        FakeData::CityName(s) => println!("Generated City (FR_FR): {}", s),
-        _ => unreachable!(),
-    }
+    // let city_fr = get_fake_data("CityName", FR_FR);
+    // match city_fr {
+    //     // Note: For FR, 'City' might give a French city name, even if imported from en::*
+    //     // This is the beauty of fake_with_context.
+    //     FakeData::CityName(s) => println!("Generated City (FR_FR): {}", s),
+    //     _ => unreachable!(),
+    // }
 
-    let words_fr = get_fake_data("Words", FR_FR);
-    match words_fr {
-        FakeData::Words(s) => println!("Generated Words (FR_FR): {:?}", s),
-        _ => unreachable!(),
-    }
+    // let words_fr = get_fake_data("Words", FR_FR);
+    // match words_fr {
+    //     FakeData::Words(s) => println!("Generated Words (FR_FR): {:?}", s),
+    //     _ => unreachable!(),
+    // }
 
-    // Example usage with Brazilian Portuguese locale
-    let name_pt_br = get_fake_data("Name", PT_BR);
-    match name_pt_br {
-        FakeData::Name(s) => println!("Generated Name (PT_BR): {}", s),
-        _ => unreachable!(),
-    }
+    // // Example usage with Brazilian Portuguese locale
+    // let name_pt_br = get_fake_data("Name", PT_BR);
+    // match name_pt_br {
+    //     FakeData::Name(s) => println!("Generated Name (PT_BR): {}", s),
+    //     _ => unreachable!(),
+    // }
 
-    let unknown = get_fake_data("NonExistentType", EN);
-    match unknown {
-        FakeData::Other(s) => println!("Generated Other: {}", s),
-        _ => unreachable!(),
-    }
+    // let unknown = get_fake_data("NonExistentType", EN);
+    // match unknown {
+    //     FakeData::Other(s) => println!("Generated Other: {}", s),
+    //     _ => unreachable!(),
+    // }
 }
