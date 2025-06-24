@@ -41,12 +41,27 @@ fn main() -> io::Result<()> {
         for param in params.split(',') {
             let key_val = param.split('=').collect::<Vec<&str>>();
             if key_val.len() == 2 && key_val[0] == "format" {
-                output_format = key_val[1].to_lowercase();
-                log::info!(
-                    "Parameter input '{}' found, output format set to: {}",
-                    params,
-                    output_format
-                );
+                if key_val[1].to_lowercase().starts_with("proto") {
+                    output_format = "protobuf_binary".to_string();
+                    log::info!(
+                        "Parameter input '{}' found, output format set to: {}",
+                        params,
+                        output_format
+                    )
+                } else if key_val[1].to_lowercase().starts_with("json") {
+                    output_format = "json".to_string();
+                    log::info!(
+                        "Parameter input '{}' found, output format set to: {}",
+                        params,
+                        output_format
+                    )
+                } else {
+                    log::warn!(
+                        "Unrecognized output format '{}', defaulting to '{}'",
+                        key_val[1],
+                        output_format
+                    );
+                }
             } else {
                 log::warn!("Unrecognized parameter '{}', expected 'format=...'", param);
             }
