@@ -214,7 +214,7 @@ macro_rules! generate_faker_match_arms {
     ) => {
         // Outer match on language
         match $language_var.to_lowercase().as_str() {
-            "ar_sa" | "ar" | "english" => {
+            "ar_sa" | "ar" | "arabic" => {
                 // Call the internal rule, passing the concrete locale instance
                 generate_faker_match_arms!(@internal_faker_match $data_type_var, AR_SA,
                     [ $( ($string_key_no_arg, $faker_path_no_arg, $enum_variant_no_arg) ),* ],
@@ -313,9 +313,15 @@ macro_rules! generate_faker_match_arms {
 }
 
 pub fn get_fake_data(data_type: &str, language: &str) -> Option<FakeData> {
+    // If no language is provided, default to English
+    let derived_language = if language.is_empty() {
+        "english"
+    } else {
+        language
+    };
     let result = generate_faker_match_arms!(
-        data_type, // <<< FIX: Passing `data_type` as the first argument
-        language,  // This is now the second argument (the locale variable)
+        data_type,
+        derived_language,
         // --- START OF FIRST LIST (Unit Struct Fakers - call method directly) ---
         [
             ("FirstName", FirstName, FirstName),

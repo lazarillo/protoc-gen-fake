@@ -42,6 +42,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     );
 
     // Define the Cargo's output directory for generated Rust files.
+    // This is where `protobuf-codegen` will initially place its output.
     let out_dir_cargo = PathBuf::from(env::var("OUT_DIR")?);
     println!(
         "cargo:warning=protobuf-codegen will output to Cargo's OUT_DIR: {:?}",
@@ -76,17 +77,13 @@ fn main() -> Result<(), Box<dyn Error>> {
         "cargo:warning=Rust protobuf code generation complete in OUT_DIR. Now copying and cleaning to src/gen/."
     );
 
-    // IMPORTANT: Post-process and copy the generated files from OUT_DIR to src/gen/
-    // protobuf-codegen names output files based on the .proto file name.
-    // So, `fake_field.proto` will become `fake_field.rs`.
-    let generated_fake_field_rs_in_out_dir = out_dir_cargo.join("fake_field.rs");
-    let target_fake_field_rs_in_src_gen = src_gen_dir.join("fake_field.rs");
-
-    // Filter attributes and copy the cleaned file
+    // Post-process and copy the generated `fake_field.rs` from OUT_DIR to src/gen/
     filter_attributes(
-        &generated_fake_field_rs_in_out_dir,
-        &target_fake_field_rs_in_src_gen,
+        &out_dir_cargo.join("fake_field.rs"),
+        &src_gen_dir.join("fake_field.rs"),
     )?;
+
+    // Removed the copying of `user.rs` as the plugin will now use reflection.
 
     Ok(())
 }
