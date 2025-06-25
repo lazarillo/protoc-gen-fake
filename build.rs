@@ -1,74 +1,92 @@
+use prost_build::Config as ProstConfig; // Alias to avoid name collision
 use std::env;
 use std::error::Error;
-use std::fs;
-use std::io::{self, Read, Write};
-use std::path::{Path, PathBuf};
-
-// Helper function to filter out inner attributes and inner doc comments
-fn filter_attributes(input: &Path, output: &Path) -> io::Result<()> {
-    let content = fs::read_to_string(input)?;
-    let mut filtered_lines = Vec::new();
-
-    for line in content.lines() {
-        // Filter out lines that start with `#!` (inner attributes)
-        // or `//!` (inner doc comments).
-        // This is a common heuristic for generated Protobuf files.
-        if !line.trim().starts_with("#!") && !line.trim().starts_with("//!") {
-            filtered_lines.push(line);
-        }
-    }
-    fs::write(output, filtered_lines.join("\n"))?;
-    Ok(())
-}
+use std::path::PathBuf;
 
 fn main() -> Result<(), Box<dyn Error>> {
-    // Base directory for proto files
-    let proto_dir = "proto";
+    let proto_dir = "proto"; // Root of your .proto files
+    let out_dir_cargo = PathBuf::from(env::var("OUT_DIR")?); // Cargo's standard output directory
 
-    // Tell Cargo to rerun this build script if any of the proto files change.
+    // --- RERUN-IF-CHANGED RULES ---
+    // These ensure Cargo rebuilds if the proto files change.
     println!(
         "cargo:rerun-if-changed={}/gen_fake/fake_field.proto",
         proto_dir
     );
-
-    // Define the Cargo's output directory for generated Rust files.
-    // This is where `protobuf-codegen` will initially place its output.
-    let out_dir_cargo = PathBuf::from(env::var("OUT_DIR")?);
     println!(
-        "cargo:warning=protobuf-codegen will output to Cargo's OUT_DIR: {:?}",
-        out_dir_cargo
+        "cargo:rerun-if-changed={}/google/protobuf/descriptor.proto",
+        proto_dir
+    );
+    println!(
+        "cargo:rerun-if-changed={}/google/protobuf/compiler/plugin.proto",
+        proto_dir
     );
 
-    // Define the *target* directory within your `src/` where you want the generated files to end up.
-    let src_gen_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR")?)
+    // --- PROTOBUF-CODEGEN FOR RUST-PROTOBUF TYPES ---
+    // This generates `fake_field.rs` for `rust-protobuf`'s use (for custom option parsing).
+    let protobuf_gen_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR")?)
         .join("src")
-        .join("gen");
-    fs::create_dir_all(&src_gen_dir)?; // Ensure the `src/gen` directory exists
-
+        .join("gen_protobuf");
+    std::fs::create_dir_all(&protobuf_gen_dir)?;
     println!(
-        "cargo:warning=Generated .rs files will be copied to your src/gen/ directory: {:?}",
-        src_gen_dir
+        "cargo:warning=Generating rust-protobuf code into {:?}",
+        protobuf_gen_dir
     );
-
-    // Run protobuf_codegen to generate the .rs files into Cargo's OUT_DIR
     protobuf_codegen::Codegen::new()
         .inputs(&[format!("{}/gen_fake/fake_field.proto", proto_dir)])
         .includes(&[proto_dir])
-        .out_dir(&out_dir_cargo) // Generate to Cargo's OUT_DIR initially
+        .out_dir(&protobuf_gen_dir)
+        .customize(protobuf_codegen::Customize::default().gen_mod_rs(false))
         .run_from_script();
+    println!("cargo:warning=rust-protobuf code generation complete");
 
+    // --- PROST-BUILD FOR PROST TYPES (NOT USED) AND FILE DESCRIPTOR SET ---
+    // This generates:
+    // 1. Rust structs compatible with `prost` (e.g., for `FakeDataFieldOption`) into `src/gen_prost`.
+    //    (Note: These are technically generated but we rely on `rust-protobuf`'s `FakeDataFieldOption` for parsing.)
+    // 2. A binary `FileDescriptorSet` (`file_descriptor_set.bin`) for `prost-reflect`'s runtime use.
+    //    This FileDescriptorSet *only* contains the schema for your custom option and google.protobuf.descriptor,
+    //    NOT user-defined protos like `user.proto`.
+    let prost_gen_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR")?)
+        .join("src")
+        .join("gen_prost");
+    std::fs::create_dir_all(&prost_gen_dir)?;
     println!(
-        "cargo:warning=Rust protobuf code generation complete in OUT_DIR. Now copying and cleaning to src/gen/."
+        "cargo:warning=Generating Prost code into {:?}",
+        prost_gen_dir
     );
 
-    // Post-process and copy the generated `fake_field.rs` from OUT_DIR to src/gen/
-    filter_attributes(
-        &out_dir_cargo.join("fake_field.rs"),
-        &src_gen_dir.join("fake_field.rs"),
-    )?;
+    let descriptor_file_name = "file_descriptor_set.bin";
+    let descriptor_full_path_buf = out_dir_cargo.join(descriptor_file_name);
+    let descriptor_full_path_str = descriptor_full_path_buf
+        .to_str()
+        .ok_or_else(|| "Path contains invalid Unicode")?
+        .to_owned();
 
-    // Post-process and copy the generated `mod.rs` file from OUT_DIR to src/gen/
-    filter_attributes(&out_dir_cargo.join("mod.rs"), &src_gen_dir.join("mod.rs"))?;
+    let mut prost_config = ProstConfig::new();
+    prost_config
+        .out_dir(&prost_gen_dir)
+        // Generate the FileDescriptorSet.
+        // CRUCIAL: Only include `fake_field.proto` and `descriptor.proto` here.
+        // user.proto is NOT included, as its schema will be provided at runtime via CodeGeneratorRequest.
+        .file_descriptor_set_path(&descriptor_full_path_str)
+        .compile_protos(
+            &[
+                format!("{}/gen_fake/fake_field.proto", proto_dir),
+                format!("{}/google/protobuf/descriptor.proto", proto_dir),
+            ],
+            &[proto_dir],
+        )?;
+
+    println!("cargo:warning=Prost code generation complete");
+    println!("cargo:warning=Prost-reflect descriptor set generation complete");
+
+    // Tell Cargo to set an environment variable pointing to the generated descriptor set.
+    // This path will be used by `include_bytes!` in `main.rs` for the STATIC pool.
+    println!(
+        "cargo:rustc-env=DESCRIPTOR_SET_BIN_PATH={}",
+        descriptor_full_path_buf.display()
+    );
 
     Ok(())
 }

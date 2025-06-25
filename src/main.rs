@@ -1,22 +1,38 @@
-use protobuf::Message; // Import Message trait for parsing and serialization
+use once_cell::sync::Lazy;
+use prost::Message;
+use prost_reflect::{
+    DescriptorPool, DynamicMessage, ExtensionDescriptor, FieldDescriptor, FileDescriptor,
+    Kind as ProstFieldKind, MessageDescriptor, Value,
+};
+use prost_types::FileDescriptorSet;
+use protobuf::Message as PbMessage;
+use protobuf::descriptor::{
+    FieldOptions as PbFieldOptions, FileDescriptorProto as PbFileDescriptorProto,
+};
+use protobuf::plugin::{
+    CodeGeneratorRequest as PbCodeGeneratorRequest,
+    CodeGeneratorResponse as PbCodeGeneratorResponse,
+};
+use serde::de; // Import Message trait for parsing and serialization
 use std::collections::HashSet;
 use std::error::Error;
-use std::io::{self, Read, Write}; // Import locales for fake data generation
+use std::io::{self, Read, Write}; // Import locales for fake data generation // Import Lazy for static initialization
 
-// Corrected: CodeGeneratorRequest and CodeGeneratorResponse are in `protobuf::plugin`.
-use protobuf::plugin::{CodeGeneratorRequest, CodeGeneratorResponse};
+#[path = "./gen_protobuf/fake_field.rs"]
+pub mod generated_proto; // Import the generated protobuf code for custom options
 
-// Common descriptor types are usually available directly from `protobuf::descriptor`.
-use protobuf::descriptor::FileDescriptorProto;
-
-#[path = "./gen/mod.rs"]
-pub mod generated_protos;
-
-use crate::generated_protos::fake_field::FakeDataFieldOption;
-use crate::generated_protos::fake_field::exts::fake_data;
+use crate::generated_proto::FakeDataFieldOption;
+use crate::generated_proto::exts::fake_data;
 
 pub mod fake_data; // Import your fake data generation logic
 use crate::fake_data::{FakeData, get_fake_data};
+
+static OPTION_DESCRIPTOR_POOL: Lazy<DescriptorPool> = Lazy::new(|| {
+    // Create a descriptor pool with the fake field option (and descriptor) registered
+    let descriptor_set = include_bytes!(env!("DESCRIPTOR_SET_BIN_PATH"));
+    DescriptorPool::decode(descriptor_set.as_ref())
+        .expect("Failed to decode compiled descriptor set with fake field options")
+});
 
 fn main() -> io::Result<()> {
     // Initialize logging for better debugging output
@@ -30,7 +46,7 @@ fn main() -> io::Result<()> {
     log::trace!("Raw stdin buffer (hex): {:x?}", buffer);
 
     // Decode the request using protobuf::Message::parse_from_bytes
-    let request = CodeGeneratorRequest::parse_from_bytes(&buffer)
+    let request = PbCodeGeneratorRequest::parse_from_bytes(&buffer)
         .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
 
     // Log full request at DEBUG level (only shows with RUST_LOG=debug or lower)
@@ -76,8 +92,45 @@ fn main() -> io::Result<()> {
     // Get the set of files to generate (explicitly requested by protoc)
     let key_files: HashSet<&String> = request.file_to_generate.iter().collect();
 
-    let mut response = CodeGeneratorResponse::new(); // Use .new() for rust-protobuf messages
+    let mut response = PbCodeGeneratorResponse::new(); // Use .new() for rust-protobuf messages
 
+    // Build the runtime descriptor pool, including what is passed by the user
+    log::debug!("Building runtime descriptor pool, including user-provided files");
+    let mut runtime_file_descriptor_set = FileDescriptorSet::default();
+    // Convert between `rust-protobuf` and `prost` types
+    runtime_file_descriptor_set.file = request
+        .proto_file
+        .into_iter()
+        .map(|pb_fd| {
+            let pb_bytes = pb_fd
+                .write_to_bytes()
+                .expect("Failed to serialize PbFileDescriptorProto");
+            prost_types::FileDescriptorProto::decode(pb_bytes.as_ref())
+                .expect("Failed to decode prost_types::FileDescriptorProto")
+        })
+        .collect();
+    let runtime_descriptor_pool =
+        DescriptorPool::from_file_descriptor_set(runtime_file_descriptor_set).map_err(|e| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("Failed to build runtime descriptor pool: {}", e),
+            )
+        })?;
+    log::debug!(
+        "Runtime descriptor pool built successfully with the following {} files: {}",
+        runtime_descriptor_pool.files().len(),
+        runtime_descriptor_pool
+            .files()
+            .map(|f| f.name().to_string())
+            .collect::<Vec<String>>()
+            .join(", ")
+    );
+    // I will need to double check this line immediately below... cannot know until I run it
+    let fake_data_option_descr = OPTION_DESCRIPTOR_POOL
+        .get_extension_by_name("gen_fake.fake_data")
+        .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "Extension 'gen_fake.fake_data' definition not found in static descriptor pool. Ensure fake_field.proto is compiled into DESCRIPTOR_SET_BIN_PATH."))?;
+
+    // TODO: I AM RIGHT HERE!!!!!!!!!!!!
     // Iterate through the key file(s) to use for generating fake data
     // This is the main entry point for processing the request.
     for &filename in key_files.iter() {
