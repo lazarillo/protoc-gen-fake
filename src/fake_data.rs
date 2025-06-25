@@ -1,10 +1,10 @@
 use fake::{
     Fake, // Import specific locale instances directly from `fake::locales`
     faker::{
-        address::en::*, administrative::en::*, automotive::en::*, barcode::en::*, boolean::en::*,
-        chrono::en::*, company::en::*, creditcard::en::*, currency::en::*, filesystem::en::*,
-        finance::en::*, impls::*, internet::raw::*, job::en::*, lorem::raw::*, name::raw::*,
-        number::en::*, phone_number::en::*,
+        address::raw::*, administrative::raw::*, automotive::raw::*, barcode::raw::*,
+        boolean::raw::*, chrono::raw::*, company::raw::*, creditcard::raw::*, currency::raw::*,
+        filesystem::raw::*, finance::raw::*, impls::*, internet::raw::*, job::raw::*,
+        lorem::raw::*, name::raw::*, number::raw::*, phone_number::raw::*,
     },
     locales::{AR_SA, DE_DE, Data, EN, FR_FR, IT_IT, JA_JP, PT_BR, PT_PT, ZH_CN, ZH_TW},
 };
@@ -443,13 +443,95 @@ pub fn get_fake_data(data_type: &str, language: &str) -> Option<FakeData> {
         [
             ("FirstName", FirstName, FirstName),
             ("LastName", LastName, LastName),
-            ("SafeEmail", SafeEmail, SafeEmail)
+            ("Suffix", Suffix, Suffix),
+            ("Name", Name, Name),
+            ("NameWithTitle", NameWithTitle, NameWithTitle),
+            ("Seniority", Seniority, Seniority),
+            ("Field", Field, Field),
+            ("Position", Position, Position),
+            ("Semver", Semver, Semver),
+            ("SemverStable", SemverStable, SemverStable),
+            ("SemverUnstable", SemverUnstable, SemverUnstable),
+            ("Isbn", Isbn, Isbn),
+            ("Isbn10", Isbn10, Isbn10),
+            ("Isbn13", Isbn13, Isbn13),
+            ("CreditCardNumber", CreditCardNumber, CreditCardNumber),
+            ("CompanySuffix", CompanySuffix, CompanySuffix),
+            ("CompanyName", CompanyName, CompanyName),
+            ("Buzzword", Buzzword, Buzzword),
+            ("BuzzwordMiddle", BuzzwordMiddle, BuzzwordMiddle),
+            ("BuzzwordTail", BuzzwordTail, BuzzwordTail),
+            ("CatchPhrase", CatchPhrase, CatchPhrase),
+            ("BsVerb", BsVerb, BsVerb),
+            ("BsAdj", BsAdj, BsAdj),
+            ("BsNoun", BsNoun, BsNoun),
+            ("Bs", Bs, Bs),
+            ("Profession", Profession, Profession),
+            ("Industry", Industry, Industry),
+            ("FreeEmailProvider", FreeEmailProvider, FreeEmailProvider),
+            ("DomainSuffix", DomainSuffix, DomainSuffix),
+            ("FreeEmail", FreeEmail, FreeEmail),
+            ("SafeEmail", SafeEmail, SafeEmail),
+            ("Username", Username, Username),
+            ("IPv4", IPv4, IPv4),
+            ("IPv6", IPv6, IPv6),
+            ("IP", IP, IP),
+            ("MACAddress", MACAddress, MACAddress),
+            ("UserAgent", UserAgent, UserAgent),
+            ("FilePath", FilePath, FilePath),
+            ("FileName", FileName, FileName),
+            ("FileExtension", FileExtension, FileExtension),
+            ("DirPath", DirPath, DirPath),
+            ("MimeType", MimeType, MimeType),
+            ("CurrencyCode", CurrencyCode, CurrencyCode),
+            ("CurrencyName", CurrencyName, CurrencyName),
+            ("CurrencySymbol", CurrencySymbol, CurrencySymbol),
+            ("Bic", Bic, Bic),
+            ("Isin", Isin, Isin),
+            ("Time", Time, Time),
+            ("Date", Date, Date),
+            ("DateTime", DateTime, DateTime),
+            ("PhoneNumber", PhoneNumber, PhoneNumber),
+            ("CellNumber", CellNumber, CellNumber),
+            ("CityPrefix", CityPrefix, CityPrefix),
+            ("CitySuffix", CitySuffix, CitySuffix),
+            ("CityName", CityName, CityName),
+            ("CountryName", CountryName, CountryName),
+            ("CountryCode", CountryCode, CountryCode),
+            ("StreetSuffix", StreetSuffix, StreetSuffix),
+            ("TimeZone", TimeZone, TimeZone),
+            ("StateName", StateName, StateName),
+            ("StateAbbr", StateAbbr, StateAbbr),
+            (
+                "SecondaryAddressType",
+                SecondaryAddressType,
+                SecondaryAddressType
+            ),
+            ("SecondaryAddress", SecondaryAddress, SecondaryAddress),
+            ("ZipCode", ZipCode, ZipCode),
+            ("PostCode", PostCode, PostCode),
+            ("BuildingNumber", BuildingNumber, BuildingNumber),
+            ("Latitude", Latitude, Latitude),
+            ("Longitude", Longitude, Longitude),
+            ("Word", Word, Word),
+            ("Seniority", Seniority, Seniority),
+            ("Field", Field, Field),
+            ("Position", Position, Position),
+            ("Semver", Semver, Semver),
+            ("SemverStable", SemverStable, SemverStable),
+            ("SemverUnstable", SemverUnstable, SemverUnstable),
+            ("Isbn", Isbn, Isbn),
+            ("Isbn10", Isbn10, Isbn10),
+            ("Isbn13", Isbn13, Isbn13)
         ],
         // --- START OF SECOND LIST (Fakers with Range<usize> constructor arguments) ---
         [
             ("Words", Words, Words, 0..10),
+            ("Sentence", Sentence, Sentence, 5..10),
             ("Sentences", Sentences, Sentences, 0..10),
-            ("Paragraphs", Paragraphs, Paragraphs, 0..10)
+            ("Paragraph", Paragraph, Paragraph, 5..10),
+            ("Paragraphs", Paragraphs, Paragraphs, 0..10),
+            ("Password", Password, Password, 10..20)
         ] // --- END OF SECOND LIST ---
     );
 
@@ -463,138 +545,6 @@ pub fn get_fake_data(data_type: &str, language: &str) -> Option<FakeData> {
     }
     None
 }
-
-// pub fn get_fake_data<L>(data_type: &str, locale: L) -> FakeData
-// where
-//     L: fake::locales::Data + Copy + 'static,
-// {
-//     let result = generate_faker_match_arms!(
-//         data_type, // <<< FIX: Passing `data_type` as the first argument
-//         locale,    // This is now the second argument (the locale variable)
-//         // --- START OF FIRST LIST (Unit Struct Fakers - call method directly) ---
-//         [
-//             ("FirstName", FirstName, FirstName),
-//             ("LastName", LastName, LastName),
-//             ("Suffix", Suffix, Suffix),
-//             ("Name", Name, Name),
-//             ("NameWithTitle", NameWithTitle, NameWithTitle),
-//             ("Seniority", Seniority, Seniority),
-//             ("Field", Field, Field),
-//             ("Position", Position, Position),
-//             ("Semver", Semver, Semver),
-//             ("SemverStable", SemverStable, SemverStable),
-//             ("SemverUnstable", SemverUnstable, SemverUnstable),
-//             ("Isbn", Isbn, Isbn),
-//             ("Isbn10", Isbn10, Isbn13),
-//             ("Isbn13", Isbn13, Isbn13),
-//             ("CreditCardNumber", CreditCardNumber, CreditCardNumber),
-//             ("CompanySuffix", CompanySuffix, CompanySuffix),
-//             ("CompanyName", CompanyName, CompanyName),
-//             ("Buzzword", Buzzword, Buzzword),
-//             ("BuzzwordMiddle", BuzzwordMiddle, BuzzwordMiddle),
-//             ("BuzzwordTail", BuzzwordTail, BuzzwordTail),
-//             ("CatchPhrase", CatchPhrase, CatchPhrase),
-//             ("BsVerb", BsVerb, BsVerb),
-//             ("BsAdj", BsAdj, BsAdj),
-//             ("BsNoun", BsNoun, BsNoun),
-//             ("Bs", Bs, Bs),
-//             ("Profession", Profession, Profession),
-//             ("Industry", Industry, Industry),
-//             ("FreeEmailProvider", FreeEmailProvider, FreeEmailProvider),
-//             ("DomainSuffix", DomainSuffix, DomainSuffix),
-//             ("FreeEmail", FreeEmail, FreeEmail),
-//             ("SafeEmail", SafeEmail, SafeEmail),
-//             ("Username", Username, Username),
-//             ("Password", Password, Password),
-//             ("IPv4", IPv4, IPv4),
-//             ("IPv6", IPv6, IPv6),
-//             ("IP", IP, IP),
-//             ("MACAddress", MACAddress, MACAddress),
-//             ("UserAgent", UserAgent, UserAgent),
-//             ("FilePath", FilePath, FilePath),
-//             ("FileName", FileName, FileName),
-//             ("FileExtension", FileExtension, FileExtension),
-//             ("DirPath", DirPath, DirPath),
-//             ("MimeType", MimeType, MimeType),
-//             ("CurrencyCode", CurrencyCode, CurrencyCode),
-//             ("CurrencyName", CurrencyName, CurrencyName),
-//             ("CurrencySymbol", CurrencySymbol, CurrencySymbol),
-//             ("Bic", Bic, Bic),
-//             ("Isin", Isin, Isin),
-//             ("Time", Time, Time),
-//             ("Date", Date, Date),
-//             ("DateTime", DateTime, DateTime),
-//             ("PhoneNumber", PhoneNumber, PhoneNumber),
-//             ("CellNumber", CellNumber, CellNumber),
-//             // <<< FIX: Changed CityName to City, and CountryName to Country
-//             ("CityPrefix", CityPrefix, CityPrefix),
-//             ("CitySuffix", CitySuffix, CitySuffix),
-//             ("CountryCode", CountryCode, CountryCode),
-//             ("StreetSuffix", StreetSuffix, StreetSuffix),
-//             ("TimeZone", TimeZone, TimeZone),
-//             ("StateName", StateName, StateName),
-//             ("StateAbbr", StateAbbr, StateAbbr),
-//             (
-//                 "SecondaryAddressType",
-//                 SecondaryAddressType,
-//                 SecondaryAddressType
-//             ),
-//             ("SecondaryAddress", SecondaryAddress, SecondaryAddress),
-//             ("ZipCode", ZipCode, ZipCode),
-//             ("PostCode", PostCode, PostCode),
-//             ("BuildingNumber", BuildingNumber, BuildingNumber),
-//             ("Latitude", Latitude, Latitude),
-//             ("Longitude", Longitude, Longitude),
-//             ("Geohash", Geohash, Geohash),
-//             ("Word", Word, Word),
-//             ("Sentence", Sentence, Sentence),
-//             ("Paragraph", Paragraph, Paragraph)
-//         ], // --- END OF FIRST LIST ---
-//         [("StreetName", StreetName, StreetName)], // <--- This comma is essential to separate it from the next list
-//         // --- START OF SECOND LIST (Fakers with Range<usize> constructor arguments) ---
-//         [
-//             ("Words", Words, Words, 0..10),
-//             ("Sentences", Sentences, Sentences, 0..10),
-//             ("Paragraphs", Paragraphs, Paragraphs, 0..10)
-//         ] // --- END OF SECOND LIST ---
-//     );
-
-//     if let Some(data) = result {
-//         return data;
-//     }
-
-//     // Special handling for "Age" (not a fake crate faker)
-//     if data_type == "Age" {
-//         return FakeData::Age(rand::rng().random_range(8..90));
-//     }
-
-//     // Fallback for unknown data types
-//     FakeData::Other("Nothing".to_string())
-// }
-
-// pub enum LanguageLookup {
-//     Arabic(AR_SA),
-//     ChineseSimplified(ZH_CN),
-//     ChineseTraditional(ZH_TW),
-//     English(EN),
-//     French(FR_FR),
-//     German(DE_DE),
-//     Italian(IT_IT),
-//     Japanese(JA_JP),
-//     PortugueseBrazil(PT_BR),
-//     PortuguesePortugal(PT_PT),
-// }
-
-// fn get_lang(language: &str) -> Option<&'static dyn Locale> {
-//     // This function allows for a more flexible way to provide a language code
-//     let lower_lang = language.to_lowercase().as_str();
-//     match lower_lang {
-//         "en" => EN,
-//         "fr" => FR_FR,
-//         "pt_br" => PT_BR,
-//         _ => EN, // Default to English if the language is not recognized
-//     }
-// }
 
 fn main() {
     // SafeEmail().fake_with_rng(&mut ThreadRng::default());
