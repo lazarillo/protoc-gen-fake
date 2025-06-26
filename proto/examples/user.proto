@@ -13,4 +13,9 @@ message User {
     data_type: "LastName"
     language: "PT_BR"
   }];
+  repeated string phone_numbers = 4 [(gen_fake.fake_data) = {
+    data_type: "PhoneNumber"
+    min_count: 1
+    max_count: 3
+  }];
 }

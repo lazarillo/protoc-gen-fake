@@ -28,4 +28,15 @@ pub struct FakeDataFieldOption {
     /// "ZH_CN", "zh_CN", or "Chinese" are all valid values to represent Chinese.
     #[prost(string, tag = "2")]
     pub language: ::prost::alloc::string::String,
+    /// For repeated fields or optional fields, the minimum number of items to generate.
+    /// If this is set to 0, the field will be allowed to be empty. Any value greater than
+    /// 1 is equivalent to 1 for an optional field.
+    /// If not set, the default is 1.
+    #[prost(int32, tag = "3")]
+    pub min_count: i32,
+    /// For repeated fields, the maximum number of items to generate. Any value less than
+    /// 1 is equivalent to 1. (Ie, the field cannot *always* be empty.)
+    /// If not set, the default is 5.
+    #[prost(int32, tag = "4")]
+    pub max_count: i32,
 }

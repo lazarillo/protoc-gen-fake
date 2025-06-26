@@ -32,6 +32,10 @@ pub struct FakeDataFieldOption {
     pub data_type: ::std::string::String,
     // @@protoc_insertion_point(field:gen_fake.FakeDataFieldOption.language)
     pub language: ::std::string::String,
+    // @@protoc_insertion_point(field:gen_fake.FakeDataFieldOption.min_count)
+    pub min_count: i32,
+    // @@protoc_insertion_point(field:gen_fake.FakeDataFieldOption.max_count)
+    pub max_count: i32,
     // special fields
     // @@protoc_insertion_point(special_field:gen_fake.FakeDataFieldOption.special_fields)
     pub special_fields: ::protobuf::SpecialFields,
@@ -49,7 +53,7 @@ impl FakeDataFieldOption {
     }
 
     fn generated_message_descriptor_data() -> ::protobuf::reflect::GeneratedMessageDescriptorData {
-        let mut fields = ::std::vec::Vec::with_capacity(2);
+        let mut fields = ::std::vec::Vec::with_capacity(4);
         let mut oneofs = ::std::vec::Vec::with_capacity(0);
         fields.push(::protobuf::reflect::rt::v2::make_simpler_field_accessor::<_, _>(
             "data_type",
@@ -60,6 +64,16 @@ impl FakeDataFieldOption {
             "language",
             |m: &FakeDataFieldOption| { &m.language },
             |m: &mut FakeDataFieldOption| { &mut m.language },
+        ));
+        fields.push(::protobuf::reflect::rt::v2::make_simpler_field_accessor::<_, _>(
+            "min_count",
+            |m: &FakeDataFieldOption| { &m.min_count },
+            |m: &mut FakeDataFieldOption| { &mut m.min_count },
+        ));
+        fields.push(::protobuf::reflect::rt::v2::make_simpler_field_accessor::<_, _>(
+            "max_count",
+            |m: &FakeDataFieldOption| { &m.max_count },
+            |m: &mut FakeDataFieldOption| { &mut m.max_count },
         ));
         ::protobuf::reflect::GeneratedMessageDescriptorData::new_2::<FakeDataFieldOption>(
             "FakeDataFieldOption",
@@ -85,6 +99,12 @@ impl ::protobuf::Message for FakeDataFieldOption {
                 18 => {
                     self.language = is.read_string()?;
                 },
+                24 => {
+                    self.min_count = is.read_int32()?;
+                },
+                32 => {
+                    self.max_count = is.read_int32()?;
+                },
                 tag => {
                     ::protobuf::rt::read_unknown_or_skip_group(tag, is, self.special_fields.mut_unknown_fields())?;
                 },
@@ -103,6 +123,12 @@ impl ::protobuf::Message for FakeDataFieldOption {
         if !self.language.is_empty() {
             my_size += ::protobuf::rt::string_size(2, &self.language);
         }
+        if self.min_count != 0 {
+            my_size += ::protobuf::rt::int32_size(3, self.min_count);
+        }
+        if self.max_count != 0 {
+            my_size += ::protobuf::rt::int32_size(4, self.max_count);
+        }
         my_size += ::protobuf::rt::unknown_fields_size(self.special_fields.unknown_fields());
         self.special_fields.cached_size().set(my_size as u32);
         my_size
@@ -114,6 +140,12 @@ impl ::protobuf::Message for FakeDataFieldOption {
         }
         if !self.language.is_empty() {
             os.write_string(2, &self.language)?;
+        }
+        if self.min_count != 0 {
+            os.write_int32(3, self.min_count)?;
+        }
+        if self.max_count != 0 {
+            os.write_int32(4, self.max_count)?;
         }
         os.write_unknown_fields(self.special_fields.unknown_fields())?;
         ::std::result::Result::Ok(())
@@ -134,6 +166,8 @@ impl ::protobuf::Message for FakeDataFieldOption {
     fn clear(&mut self) {
         self.data_type.clear();
         self.language.clear();
+        self.min_count = 0;
+        self.max_count = 0;
         self.special_fields.clear();
     }
 
@@ -141,6 +175,8 @@ impl ::protobuf::Message for FakeDataFieldOption {
         static instance: FakeDataFieldOption = FakeDataFieldOption {
             data_type: ::std::string::String::new(),
             language: ::std::string::String::new(),
+            min_count: 0,
+            max_count: 0,
             special_fields: ::protobuf::SpecialFields::new(),
         };
         &instance
@@ -172,10 +208,12 @@ pub mod exts {
 
 static file_descriptor_proto_data: &'static [u8] = b"\
     \n\x19gen_fake/fake_field.proto\x12\x08gen_fake\x1a\x20google/protobuf/d\
-    escriptor.proto\"N\n\x13FakeDataFieldOption\x12\x1b\n\tdata_type\x18\x01\
-    \x20\x01(\tR\x08dataType\x12\x1a\n\x08language\x18\x02\x20\x01(\tR\x08la\
-    nguage:Z\n\tfake_data\x18\xd3\x0b\x20\x01(\x0b2\x1d.gen_fake.FakeDataFie\
-    ldOption\x12\x1d.google.protobuf.FieldOptionsR\x08fakeDatab\x06proto3\
+    escriptor.proto\"\x88\x01\n\x13FakeDataFieldOption\x12\x1b\n\tdata_type\
+    \x18\x01\x20\x01(\tR\x08dataType\x12\x1a\n\x08language\x18\x02\x20\x01(\
+    \tR\x08language\x12\x1b\n\tmin_count\x18\x03\x20\x01(\x05R\x08minCount\
+    \x12\x1b\n\tmax_count\x18\x04\x20\x01(\x05R\x08maxCount:Z\n\tfake_data\
+    \x18\xd3\x0b\x20\x01(\x0b2\x1d.gen_fake.FakeDataFieldOption\x12\x1d.goog\
+    le.protobuf.FieldOptionsR\x08fakeDatab\x06proto3\
 ";
 
 /// `FileDescriptorProto` object which was a source for this generated file

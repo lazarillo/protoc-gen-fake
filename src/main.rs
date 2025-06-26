@@ -175,6 +175,8 @@ fn main() -> io::Result<()> {
                 let mut json_message = serde_json::Map::new();
                 for field_descr in message_descr.fields() {
                     let field_name = field_descr.name();
+                    // Whether it is optional, required, or repeated
+                    let field_cardinality = field_descr.cardinality();
                     let field_kind = field_descr.kind();
                     let is_list_field = field_descr.is_list();
                     let is_map_field = field_descr.is_map();
@@ -209,12 +211,23 @@ fn main() -> io::Result<()> {
                         if let Some(fake_data_option) = fake_data.get(pb_options) {
                             let data_type = fake_data_option.data_type.as_str();
                             let language = fake_data_option.language.as_str();
+                            let min_count = fake_data_option.min_count;
+                            let max_count = fake_data_option.max_count;
                             if let Some(fake_value) = get_fake_data(data_type, language) {
+                                /// TODO: I am right here. I need to:
+                                /// 1. Look at the cardinality or is_list type to see if it should be repeated
+                                /// 2. Generate a vector of values based on min and max counts (setting
+                                ///    the defaults in min and max according to proto options documentation)
+                                /// 3. Generate a *maybe not present* value if the field is optional
+                                /// 4. Set the value in the DynamicMessage
+                                /// 5. Set the value in the JSON message
                                 log::info!(
-                                    "  Field '{}' - fake data type '{}' in '{}':  '{}'",
+                                    "  Field '{}' - fake data type '{}' in '{}' with min '{}' and max'{}':  '{}'",
                                     field_name,
                                     data_type,
                                     language,
+                                    min_count,
+                                    max_count,
                                     fake_value
                                 )
                             } else {
