@@ -16,7 +16,8 @@ use protobuf::plugin::{
 use serde::de; // Import Message trait for parsing and serialization
 use std::collections::HashSet;
 use std::error::Error;
-use std::io::{self, Read, Write}; // Import locales for fake data generation // Import Lazy for static initialization
+use std::io::{self, Read, Write};
+use std::path::Path; // Import Path for file handling // Import locales for fake data generation // Import Lazy for static initialization
 
 #[path = "./gen_protobuf/fake_field.rs"]
 pub mod generated_proto; // Import the generated protobuf code for custom options
@@ -48,6 +49,8 @@ fn main() -> io::Result<()> {
     // Decode the request using protobuf::Message::parse_from_bytes
     let request = PbCodeGeneratorRequest::parse_from_bytes(&buffer)
         .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+
+    let request_copy = request.clone();
 
     // Log full request at DEBUG level (only shows with RUST_LOG=debug or lower)
     log::debug!("Full CodeGeneratorRequest received: {:#?}", request);
@@ -90,7 +93,11 @@ fn main() -> io::Result<()> {
     }
 
     // Get the set of files to generate (explicitly requested by protoc)
-    let key_files: HashSet<&String> = request.file_to_generate.iter().collect();
+    let key_files: HashSet<String> = request
+        .file_to_generate
+        .iter()
+        .map(|s_ref| s_ref.clone())
+        .collect();
 
     let mut response = PbCodeGeneratorResponse::new(); // Use .new() for rust-protobuf messages
 
@@ -130,50 +137,94 @@ fn main() -> io::Result<()> {
         .get_extension_by_name("gen_fake.fake_data")
         .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "Extension 'gen_fake.fake_data' definition not found in static descriptor pool. Ensure fake_field.proto is compiled into DESCRIPTOR_SET_BIN_PATH."))?;
 
-    // TODO: I AM RIGHT HERE!!!!!!!!!!!!
     // Iterate through the key file(s) to use for generating fake data
     // This is the main entry point for processing the request.
-    for &filename in key_files.iter() {
-        let file_descr = request
+    for filename in key_files.iter() {
+        if let Some(file_descr) = request_copy
             .proto_file
             .iter()
-            .find(|f| f.name.as_deref() == Some(filename))
-            .unwrap_or_default();
-        log::info!(
-            "Processing file of interest: {}",
-            file_descr.name.as_deref().unwrap_or_default()
-        );
-        for message_descr in file_descr.message_type.iter() {
-            log::debug!(
-                " Message: {}",
-                message_descr.name.as_deref().unwrap_or_default()
+            .find(|f| f.name.as_ref() == Some(filename))
+        {
+            log::info!(
+                "Processing file of interest: {}",
+                filename // file_descr.name.as_deref().unwrap_or_default()
             );
-            for field_descr in message_descr.field.iter() {
-                log::debug!(
-                    "  Field: {}",
-                    field_descr.name.as_deref().unwrap_or_default()
-                );
-                // Check if the field has options. In rust-protobuf 3.x, `options` is an Option<FieldOptions>.
-                if let Some(options) = field_descr.options.as_ref() {
-                    // Use `get` on the extension accessor directly, passing the `FieldOptions` reference.
-                    if let Some(fake_data_option) = fake_data.get(options) {
-                        let data_type = fake_data_option.data_type.as_str();
-                        let language = fake_data_option.language.as_str();
-                        if let Some(fake_value) = get_fake_data(data_type, language) {
-                            log::info!(
-                                "  Field '{}' - fake data type '{}' in '{}':  '{}'",
-                                field_descr.name.as_deref().unwrap_or_default(),
-                                data_type,
-                                language,
-                                fake_value
+            let output_file_path = Path::new(filename);
+            let file_stem = output_file_path
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .unwrap_or_default();
+            let output_name = match output_format.as_str() {
+                "json" => format!("{}.json", file_stem),
+                _ => format!("{}.bin", file_stem),
+            };
+            let mut fake_data_content: Vec<u8> = Vec::new();
+            let runtime_file_descriptor = runtime_descriptor_pool.get_file_by_name(filename)
+                .ok_or_else(|| {
+                    io::Error::new(
+                        io::ErrorKind::NotFound,
+                        format!("File '{}' not found in (`prost-reflect`) runtime descriptor pool. This should not happen if {} is valid", filename, filename),
+                    )
+                })?;
+
+            for message_descr in runtime_file_descriptor.messages() {
+                let message_name = message_descr.name();
+                log::debug!(" Message: {}", message_name);
+                let mut message = DynamicMessage::new(message_descr.clone());
+                // Maybe this can be created only if the json flag is set?
+                let mut json_message = serde_json::Map::new();
+                for field_descr in message_descr.fields() {
+                    let field_name = field_descr.name();
+                    let field_kind = field_descr.kind();
+                    let is_list_field = field_descr.is_list();
+                    let is_map_field = field_descr.is_map();
+                    // --- 4. Find the *corresponding* rust-protobuf FieldDescriptorProto to get options ---
+                    // We need to iterate the raw protobuf::descriptor::DescriptorProto (message_type)
+                    // and then its field_protos to find the matching field by name.
+                    let message_proto = file_descr
+                        .message_type
+                        .iter()
+                        .find(|m| m.name.as_deref() == Some(message_name))
+                        .ok_or_else(|| {
+                            io::Error::new(
+                                io::ErrorKind::NotFound,
+                                format!("MessageProto for '{}' not found.", message_name),
                             )
-                        } else {
-                            log::info!(
-                                "  Field '{}' - requested fake data of type '{}' in '{}', but failed to generate it",
-                                field_descr.name.as_deref().unwrap_or_default(),
-                                data_type,
-                                language,
+                        })?;
+
+                    let field_proto = message_proto
+                        .field
+                        .iter()
+                        .find(|f| f.name.as_deref() == Some(field_name))
+                        .ok_or_else(|| {
+                            io::Error::new(
+                                io::ErrorKind::NotFound,
+                                format!("PbFieldProto for '{}' not found.", field_name),
                             )
+                        })?;
+
+                    // Now, access options using rust-protobuf's FieldOptions
+                    if let Some(pb_options) = field_proto.options.as_ref() {
+                        // Use rust-protobuf's get_extension for your custom option
+                        if let Some(fake_data_option) = fake_data.get(pb_options) {
+                            let data_type = fake_data_option.data_type.as_str();
+                            let language = fake_data_option.language.as_str();
+                            if let Some(fake_value) = get_fake_data(data_type, language) {
+                                log::info!(
+                                    "  Field '{}' - fake data type '{}' in '{}':  '{}'",
+                                    field_name,
+                                    data_type,
+                                    language,
+                                    fake_value
+                                )
+                            } else {
+                                log::info!(
+                                    "  Field '{}' - requested fake data of type '{}' in '{}', but failed to generate it",
+                                    field_name,
+                                    data_type,
+                                    language,
+                                )
+                            }
                         }
                     }
                 }
