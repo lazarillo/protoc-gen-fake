@@ -15,7 +15,7 @@ use std::fmt; // Import Display trait for formatting // Import Rng for random nu
 use std::borrow::Cow; // Import Cow for string handling
 
 // Define your comprehensive enum
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum FakeData {
     // Faker-specific types (String variants)
     CityPrefix(String),

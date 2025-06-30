@@ -1,8 +1,8 @@
 use once_cell::sync::Lazy;
 use prost::Message;
 use prost_reflect::{
-    DescriptorPool, DynamicMessage, ExtensionDescriptor, FieldDescriptor, FileDescriptor,
-    Kind as ProstFieldKind, MessageDescriptor, Value,
+    Cardinality, DescriptorPool, DynamicMessage, ExtensionDescriptor, FieldDescriptor,
+    FileDescriptor, Kind as ProstFieldKind, MessageDescriptor, Value,
 };
 use prost_types::FileDescriptorSet;
 use protobuf::Message as PbMessage;
@@ -216,16 +216,16 @@ fn main() -> io::Result<()> {
                             let data_type = fake_data_option.data_type.as_str();
                             let language = fake_data_option.language.as_str();
                             let min_count = max(fake_data_option.min_count, 0);
-                            let max_count = max(fake_data_option.max_count, 1);
+                            let max_count = max(fake_data_option.max_count, max(min_count, 1));
                             if is_list_field {
                                 let mut json_values = Vec::new();
                                 let mut repeated_values = Vec::new();
 
-                                let num_values =
-                                    rng.random_range(min_count..=max(min_count, max_count));
+                                let num_values = rng.random_range(min_count..=max_count);
 
-                                for _ in 0..num_values {
+                                for idx in 0..num_values {
                                     if let Some(fake_value) = get_fake_data(data_type, language) {
+                                        let fake_value_for_logging = fake_value.clone();
                                         if output_format == "json" {
                                             json_values.push(json!(&fake_value.to_string()));
                                         } else {
@@ -241,23 +241,104 @@ fn main() -> io::Result<()> {
                                         /// 4. Set the value in the DynamicMessage
                                         /// 5. Set the value in the JSON message
                                         log::info!(
+                                            "  Field '{}' - fake data type '{}' in '{}' with min '{}' and max'{}' iteration {}:  '{}'",
+                                            field_name,
+                                            data_type,
+                                            language,
+                                            min_count,
+                                            max_count,
+                                            idx + 1,
+                                            fake_value_for_logging,
+                                        )
+                                    } else {
+                                        log::info!(
+                                            "  Field '{}' - requested fake data of type '{}' in '{}' (iter {}), but failed to generate it",
+                                            field_name,
+                                            data_type,
+                                            language,
+                                            idx + 1,
+                                        )
+                                    }
+                                }
+                            } else if field_cardinality == Cardinality::Required {
+                                // For required fields, we generate a single value
+                                if let Some(fake_value) = get_fake_data(data_type, language) {
+                                    let fake_value_for_logging = fake_value.clone();
+                                    if output_format == "json" {
+                                        json_message.insert(
+                                            field_name.to_string(),
+                                            json!(fake_value.to_string()),
+                                        );
+                                    } else {
+                                        message.set_field(
+                                            &field_descr,
+                                            fake_value.into_prost_reflect_value(field_kind),
+                                        );
+                                    }
+                                    log::info!(
+                                        "  Field '{}' - fake data type '{}' in '{}' with min '{}' and max'{}':  '{}'",
+                                        field_name,
+                                        data_type,
+                                        language,
+                                        min_count,
+                                        max_count,
+                                        fake_value_for_logging
+                                    )
+                                } else {
+                                    log::info!(
+                                        "  Field '{}' - requested fake data of type '{}' in '{}', but failed to generate it",
+                                        field_name,
+                                        data_type,
+                                        language
+                                    )
+                                }
+                            } else if field_cardinality == Cardinality::Optional {
+                                // For optional fields, we generate a single value or leave it unset
+                                let should_generate_value = rng.random_bool(0.5);
+                                if should_generate_value || min_count > 0 {
+                                    if let Some(fake_value) = get_fake_data(data_type, language) {
+                                        let fake_value_for_logging = fake_value.clone();
+                                        if output_format == "json" {
+                                            json_message.insert(
+                                                field_name.to_string(),
+                                                json!(fake_value.to_string()),
+                                            );
+                                        } else {
+                                            message.set_field(
+                                                &field_descr,
+                                                fake_value.into_prost_reflect_value(field_kind),
+                                            );
+                                        }
+                                        log::info!(
                                             "  Field '{}' - fake data type '{}' in '{}' with min '{}' and max'{}':  '{}'",
                                             field_name,
                                             data_type,
                                             language,
                                             min_count,
                                             max_count,
-                                            fake_value
+                                            fake_value_for_logging
                                         )
                                     } else {
                                         log::info!(
                                             "  Field '{}' - requested fake data of type '{}' in '{}', but failed to generate it",
                                             field_name,
                                             data_type,
-                                            language,
+                                            language
                                         )
                                     }
+                                } else {
+                                    log::info!(
+                                        "  Field '{}' is optional, not generating value (50% chance)",
+                                        field_name
+                                    )
                                 }
+                            } else {
+                                // Map fields are not supported yet
+                                log::warn!(
+                                    "Field '{}' has unsupported cardinality mapping: {:?}. Skipping.",
+                                    field_name,
+                                    is_map_field,
+                                );
                             }
                         }
                     }
