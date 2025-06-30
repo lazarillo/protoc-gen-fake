@@ -13,7 +13,9 @@ use protobuf::plugin::{
     CodeGeneratorRequest as PbCodeGeneratorRequest,
     CodeGeneratorResponse as PbCodeGeneratorResponse,
 };
-use serde::de; // Import Message trait for parsing and serialization
+use rand::Rng;
+use serde_json::{Value as JsonValue, json}; // Import serde_json for JSON handling
+use std::cmp::{max, min};
 use std::collections::HashSet;
 use std::error::Error;
 use std::io::{self, Read, Write};
@@ -42,6 +44,9 @@ fn main() -> io::Result<()> {
     // Read the CodeGeneratorRequest from stdin
     let mut buffer = Vec::new();
     io::stdin().read_to_end(&mut buffer)?;
+
+    // Create a random number generator object
+    let mut rng = rand::rng();
 
     // Log raw stdin buffer at TRACE level (only shows with RUST_LOG=trace)
     log::trace!("Raw stdin buffer (hex): {:x?}", buffer);
@@ -166,7 +171,6 @@ fn main() -> io::Result<()> {
                         format!("File '{}' not found in (`prost-reflect`) runtime descriptor pool. This should not happen if {} is valid", filename, filename),
                     )
                 })?;
-
             for message_descr in runtime_file_descriptor.messages() {
                 let message_name = message_descr.name();
                 log::debug!(" Message: {}", message_name);
@@ -177,7 +181,7 @@ fn main() -> io::Result<()> {
                     let field_name = field_descr.name();
                     // Whether it is optional, required, or repeated
                     let field_cardinality = field_descr.cardinality();
-                    let field_kind = field_descr.kind();
+                    let field_kind = &field_descr.kind();
                     let is_list_field = field_descr.is_list();
                     let is_map_field = field_descr.is_map();
                     // --- 4. Find the *corresponding* rust-protobuf FieldDescriptorProto to get options ---
@@ -211,32 +215,49 @@ fn main() -> io::Result<()> {
                         if let Some(fake_data_option) = fake_data.get(pb_options) {
                             let data_type = fake_data_option.data_type.as_str();
                             let language = fake_data_option.language.as_str();
-                            let min_count = fake_data_option.min_count;
-                            let max_count = fake_data_option.max_count;
-                            if let Some(fake_value) = get_fake_data(data_type, language) {
-                                /// TODO: I am right here. I need to:
-                                /// 1. Look at the cardinality or is_list type to see if it should be repeated
-                                /// 2. Generate a vector of values based on min and max counts (setting
-                                ///    the defaults in min and max according to proto options documentation)
-                                /// 3. Generate a *maybe not present* value if the field is optional
-                                /// 4. Set the value in the DynamicMessage
-                                /// 5. Set the value in the JSON message
-                                log::info!(
-                                    "  Field '{}' - fake data type '{}' in '{}' with min '{}' and max'{}':  '{}'",
-                                    field_name,
-                                    data_type,
-                                    language,
-                                    min_count,
-                                    max_count,
-                                    fake_value
-                                )
-                            } else {
-                                log::info!(
-                                    "  Field '{}' - requested fake data of type '{}' in '{}', but failed to generate it",
-                                    field_name,
-                                    data_type,
-                                    language,
-                                )
+                            let min_count = max(fake_data_option.min_count, 0);
+                            let max_count = max(fake_data_option.max_count, 1);
+                            if is_list_field {
+                                let mut json_values = Vec::new();
+                                let mut repeated_values = Vec::new();
+
+                                let num_values =
+                                    rng.random_range(min_count..=max(min_count, max_count));
+
+                                for _ in 0..num_values {
+                                    if let Some(fake_value) = get_fake_data(data_type, language) {
+                                        if output_format == "json" {
+                                            json_values.push(json!(&fake_value.to_string()));
+                                        } else {
+                                            repeated_values.push(
+                                                fake_value.into_prost_reflect_value(field_kind),
+                                            );
+                                        }
+                                        /// TODO: I am right here. I need to:
+                                        /// 1. Look at the cardinality or is_list type to see if it should be repeated
+                                        /// 2. Generate a vector of values based on min and max counts (setting
+                                        ///    the defaults in min and max according to proto options documentation)
+                                        /// 3. Generate a *maybe not present* value if the field is optional
+                                        /// 4. Set the value in the DynamicMessage
+                                        /// 5. Set the value in the JSON message
+                                        log::info!(
+                                            "  Field '{}' - fake data type '{}' in '{}' with min '{}' and max'{}':  '{}'",
+                                            field_name,
+                                            data_type,
+                                            language,
+                                            min_count,
+                                            max_count,
+                                            fake_value
+                                        )
+                                    } else {
+                                        log::info!(
+                                            "  Field '{}' - requested fake data of type '{}' in '{}', but failed to generate it",
+                                            field_name,
+                                            data_type,
+                                            language,
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
@@ -297,4 +318,77 @@ fn main() -> io::Result<()> {
 //             }
 //         }
 //     }
+// }
+
+//                                     for _ in 0..num_items {
+//                                         let fake_data_item = get_fake_data(data_type_str, *locale_to_use);
+//                                         prost_values_for_list.push(fake_data_item.into_prost_reflect_value(prost_field_kind));
+//                                         json_array_values.push(json!(fake_data_item.to_string()));
+//                                     }
+//                                     dynamic_message.set_field(prost_field_descriptor, Value::List(prost_values_for_list));
+//                                     json_map.insert(field_name.to_string(), JsonValue::Array(json_array_values));
+//                                 } else if is_map_field {
+//                                     log::warn!(
+//                                         "Map field '{}' has a custom option. Dynamic generation of map entries is not fully supported by this plugin yet. Generating an empty map.",
+//                                         field_name
+//                                     );
+//                                     dynamic_message.set_field(prost_field_descriptor, Value::Map(Default::default()));
+//                                     json_map.insert(field_name.to_string(), JsonValue::Object(Default::default()));
+//                                 } else {
+//                                     let fake_data = get_fake_data(data_type_str, *locale_to_use);
+//                                     let prost_value = fake_data.into_prost_reflect_value(prost_field_kind);
+//                                     dynamic_message.set_field(prost_field_descriptor, prost_value);
+//                                     json_map.insert(field_name.to_string(), json!(fake_data.to_string()));
+//                                 }
+//                             } else {
+//                                 log::debug!("      No FakeDataFieldOption found via `fake_data.get()` for field '{}', skipping population. Setting default.", field_name);
+//                                 if let Some(default_value_ref) = dynamic_message.get_field(prost_field_descriptor) {
+//                                     json_map.insert(field_name.to_string(), default_value_ref.to_json_value());
+//                                 }
+//                             }
+//                         } else {
+//                             log::debug!("      Field '{}' has no options, skipping population. Setting default.", field_name);
+//                             if let Some(default_value_ref) = dynamic_message.get_field(prost_field_descriptor) {
+//                                 json_map.insert(field_name.to_string(), default_value_ref.to_json_value());
+//                             }
+//                         }
+//                         // --- HIGHLIGHT END ---
+//                     }
+
+//                     // --- 5. Serialize the populated message (using prost-reflect / prost) ---
+//                     match output_format.as_str() {
+//                         "json" => {
+//                             generated_file_content = serde_json::to_vec_pretty(&json_map)
+//                                 .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("Failed to serialize to JSON: {}", e)))?;
+//                             content_is_string = true;
+//                         },
+//                         _ => { // Default: protobuf_binary
+//                             generated_file_content = dynamic_message.encode_to_vec()
+//                                 .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("Failed to encode DynamicMessage to Protobuf bytes: {}", e)))?;
+//                         },
+//                     }
+//                 }
+
+//                 // --- 6. Prepare CodeGeneratorResponse (using rust-protobuf) ---
+//                 let mut generated_file = PbCodeGeneratorResponse::new_file();
+//                 generated_file.set_name(output_name);
+//                 if content_is_string {
+//                     generated_file.set_content(String::from_utf8(generated_file_content)
+//                         .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, format!("Failed to convert UTF-8 bytes to String for response: {}", e)))?);
+//                 } else {
+//                     generated_file.set_content_bytes(generated_file_content);
+//                 }
+//                 response.file.push(generated_file);
+//             } else {
+//                 log::debug!("Skipping dependency/non-primary file: {}", proto_file_name);
+//             }
+//         }
+//     }
+
+//     // --- 7. Encode CodeGeneratorResponse and write to stdout (using rust-protobuf) ---
+//     let mut output_buffer = Vec::new();
+//     response.write_to_vec(&mut output_buffer)?;
+//     io::stdout().write_all(&output_buffer)?;
+
+//     Ok(())
 // }

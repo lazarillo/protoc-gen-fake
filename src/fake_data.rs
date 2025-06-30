@@ -8,6 +8,7 @@ use fake::{
     },
     locales::{AR_SA, DE_DE, Data, EN, FR_FR, IT_IT, JA_JP, PT_BR, PT_PT, ZH_CN, ZH_TW},
 };
+use prost_reflect::{Kind as ProstFieldKind, Value as ProstFieldValue};
 use rand::{Rng, rngs::ThreadRng};
 use std::fmt; // Import Display trait for formatting // Import Rng for random number generation
 
@@ -206,6 +207,229 @@ impl fmt::Display for FakeData {
 }
 
 impl FakeData {
+    // Helper to provide owned String for `into_prost_reflect_value` below
+    pub fn into_string(self) -> String {
+        match self {
+            FakeData::CityPrefix(s)
+            | FakeData::CitySuffix(s)
+            | FakeData::CityName(s)
+            | FakeData::CountryName(s)
+            | FakeData::CountryCode(s)
+            | FakeData::StreetSuffix(s)
+            | FakeData::StreetName(s)
+            | FakeData::TimeZone(s)
+            | FakeData::StateName(s)
+            | FakeData::StateAbbr(s)
+            | FakeData::SecondaryAddressType(s)
+            | FakeData::SecondaryAddress(s)
+            | FakeData::ZipCode(s)
+            | FakeData::PostCode(s)
+            | FakeData::BuildingNumber(s)
+            | FakeData::Latitude(s)
+            | FakeData::Longitude(s)
+            | FakeData::Geohash(s)
+            | FakeData::Isbn(s)
+            | FakeData::Isbn10(s)
+            | FakeData::Isbn13(s)
+            | FakeData::CreditCardNumber(s)
+            | FakeData::CompanySuffix(s)
+            | FakeData::CompanyName(s)
+            | FakeData::Buzzword(s)
+            | FakeData::BuzzwordMiddle(s)
+            | FakeData::BuzzwordTail(s)
+            | FakeData::CatchPhrase(s)
+            | FakeData::BsVerb(s)
+            | FakeData::BsAdj(s)
+            | FakeData::BsNoun(s)
+            | FakeData::Bs(s)
+            | FakeData::Profession(s)
+            | FakeData::Industry(s)
+            | FakeData::FreeEmailProvider(s)
+            | FakeData::DomainSuffix(s)
+            | FakeData::FreeEmail(s)
+            | FakeData::SafeEmail(s)
+            | FakeData::Username(s)
+            | FakeData::Password(s)
+            | FakeData::IPv4(s)
+            | FakeData::IPv6(s)
+            | FakeData::IP(s)
+            | FakeData::MACAddress(s)
+            | FakeData::UserAgent(s)
+            | FakeData::Seniority(s)
+            | FakeData::Field(s)
+            | FakeData::Position(s)
+            | FakeData::Word(s)
+            | FakeData::Sentence(s)
+            | FakeData::FirstName(s)
+            | FakeData::LastName(s)
+            | FakeData::Title(s)
+            | FakeData::Suffix(s)
+            | FakeData::Name(s)
+            | FakeData::NameWithTitle(s)
+            | FakeData::PhoneNumber(s)
+            | FakeData::CellNumber(s)
+            | FakeData::FilePath(s)
+            | FakeData::FileName(s)
+            | FakeData::FileExtension(s)
+            | FakeData::DirPath(s)
+            | FakeData::MimeType(s)
+            | FakeData::Semver(s)
+            | FakeData::SemverStable(s)
+            | FakeData::SemverUnstable(s)
+            | FakeData::CurrencyCode(s)
+            | FakeData::CurrencyName(s)
+            | FakeData::CurrencySymbol(s)
+            | FakeData::Bic(s)
+            | FakeData::Isin(s)
+            | FakeData::HexColor(s)
+            | FakeData::RgbColor(s)
+            | FakeData::RgbaColor(s)
+            | FakeData::HslColor(s)
+            | FakeData::HslaColor(s)
+            | FakeData::Color(s)
+            | FakeData::Time(s)
+            | FakeData::Date(s)
+            | FakeData::DateTime(s)
+            | FakeData::RfcStatusCode(s)
+            | FakeData::ValidStatusCode(s)
+            | FakeData::Paragraph(s)
+            | FakeData::Other(s) => s,
+            FakeData::Age(val) => val.to_string(),
+            FakeData::Words(v) | FakeData::Sentences(v) | FakeData::Paragraphs(v) => v.join(" "), // Join into single string
+        }
+    }
+
+    // Helper to get generic Prost field values of any type
+    pub fn into_prost_reflect_value(self, expected_kind: &ProstFieldKind) -> ProstFieldValue {
+        match self {
+            FakeData::CityPrefix(s)
+            | FakeData::CitySuffix(s)
+            | FakeData::CityName(s)
+            | FakeData::CountryName(s)
+            | FakeData::CountryCode(s)
+            | FakeData::StreetSuffix(s)
+            | FakeData::StreetName(s)
+            | FakeData::TimeZone(s)
+            | FakeData::StateName(s)
+            | FakeData::StateAbbr(s)
+            | FakeData::SecondaryAddressType(s)
+            | FakeData::SecondaryAddress(s)
+            | FakeData::ZipCode(s)
+            | FakeData::PostCode(s)
+            | FakeData::BuildingNumber(s)
+            | FakeData::Latitude(s)
+            | FakeData::Longitude(s)
+            | FakeData::Geohash(s)
+            | FakeData::Isbn(s)
+            | FakeData::Isbn10(s)
+            | FakeData::Isbn13(s)
+            | FakeData::CreditCardNumber(s)
+            | FakeData::CompanySuffix(s)
+            | FakeData::CompanyName(s)
+            | FakeData::Buzzword(s)
+            | FakeData::BuzzwordMiddle(s)
+            | FakeData::BuzzwordTail(s)
+            | FakeData::CatchPhrase(s)
+            | FakeData::BsVerb(s)
+            | FakeData::BsAdj(s)
+            | FakeData::BsNoun(s)
+            | FakeData::Bs(s)
+            | FakeData::Profession(s)
+            | FakeData::Industry(s)
+            | FakeData::FreeEmailProvider(s)
+            | FakeData::DomainSuffix(s)
+            | FakeData::FreeEmail(s)
+            | FakeData::SafeEmail(s)
+            | FakeData::Username(s)
+            | FakeData::Password(s)
+            | FakeData::IPv4(s)
+            | FakeData::IPv6(s)
+            | FakeData::IP(s)
+            | FakeData::MACAddress(s)
+            | FakeData::UserAgent(s)
+            | FakeData::Seniority(s)
+            | FakeData::Field(s)
+            | FakeData::Position(s)
+            | FakeData::Word(s)
+            | FakeData::Sentence(s)
+            | FakeData::FirstName(s)
+            | FakeData::LastName(s)
+            | FakeData::Title(s)
+            | FakeData::Suffix(s)
+            | FakeData::Name(s)
+            | FakeData::NameWithTitle(s)
+            | FakeData::PhoneNumber(s)
+            | FakeData::CellNumber(s)
+            | FakeData::FilePath(s)
+            | FakeData::FileName(s)
+            | FakeData::FileExtension(s)
+            | FakeData::DirPath(s)
+            | FakeData::MimeType(s)
+            | FakeData::Semver(s)
+            | FakeData::SemverStable(s)
+            | FakeData::SemverUnstable(s)
+            | FakeData::CurrencyCode(s)
+            | FakeData::CurrencyName(s)
+            | FakeData::CurrencySymbol(s)
+            | FakeData::Bic(s)
+            | FakeData::Isin(s)
+            | FakeData::HexColor(s)
+            | FakeData::RgbColor(s)
+            | FakeData::RgbaColor(s)
+            | FakeData::HslColor(s)
+            | FakeData::HslaColor(s)
+            | FakeData::Color(s)
+            | FakeData::Time(s)
+            | FakeData::Date(s)
+            | FakeData::DateTime(s)
+            | FakeData::RfcStatusCode(s)
+            | FakeData::ValidStatusCode(s)
+            | FakeData::Paragraph(s)
+            | FakeData::Other(s) => {
+                match expected_kind {
+                    &ProstFieldKind::String => ProstFieldValue::String(s),
+                    &ProstFieldKind::Bytes => ProstFieldValue::Bytes(s.into()),
+                    // ProstFieldKind::Bytes => ProstFieldValue::Bytes(self.into_string().into()),
+                    _ => {
+                        log::warn!(
+                            "Mismatched type: FakeData is String, but Prost field is {:?}. Defaulting to String.",
+                            expected_kind
+                        );
+                        ProstFieldValue::String(s) // Fallback for unexpected kinds
+                    }
+                }
+            }
+            FakeData::Age(val) => match expected_kind {
+                &ProstFieldKind::Int32 => ProstFieldValue::I32(val as i32),
+                &ProstFieldKind::Int64 => ProstFieldValue::I64(val as i64),
+                &ProstFieldKind::Uint32 => ProstFieldValue::U32(val),
+                &ProstFieldKind::Uint64 => ProstFieldValue::U64(val as u64),
+                &ProstFieldKind::Sfixed32 => ProstFieldValue::I32(val as i32),
+                &ProstFieldKind::Sfixed64 => ProstFieldValue::I64(val as i64),
+                &ProstFieldKind::Fixed32 => ProstFieldValue::U32(val),
+                &ProstFieldKind::Fixed64 => ProstFieldValue::U64(val as u64),
+                _ => {
+                    log::warn!(
+                        "Mismatched type: FakeData is U32, but Prost field is {:?}. Defaulting to U32.",
+                        expected_kind
+                    );
+                    ProstFieldValue::U32(val)
+                }
+            },
+            FakeData::Words(v) | FakeData::Sentences(v) | FakeData::Paragraphs(v) => {
+                // For repeated string fields, we provide a Vec<Value> where each is a String
+                if expected_kind == &ProstFieldKind::String {
+                    ProstFieldValue::List(v.into_iter().map(ProstFieldValue::String).collect())
+                } else {
+                    log::warn!(
+                        "Mismatched type: FakeData is Vec<String>, but Prost field is {:?}. Joining into single String Value.",
+                        expected_kind
+                    );
+                    ProstFieldValue::String(v.join(", "))
+                }
+            }
+        }
+    }
     // Helper to get string data
     pub fn as_str_cow<'a>(&'a self) -> Option<Cow<'a, str>> {
         match self {
