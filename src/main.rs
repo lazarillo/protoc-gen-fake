@@ -1,10 +1,10 @@
 use once_cell::sync::Lazy;
-use prost::Message;
+use prost::{Message, bytes};
 use prost_reflect::{
     Cardinality, DescriptorPool, DynamicMessage, ExtensionDescriptor, FieldDescriptor,
     FileDescriptor, Kind as ProstFieldKind, MessageDescriptor, Value,
 };
-use prost_types::FileDescriptorSet;
+use prost_types::{FileDescriptorSet, field};
 use protobuf::Message as PbMessage;
 use protobuf::descriptor::{
     FieldOptions as PbFieldOptions, FileDescriptorProto as PbFileDescriptorProto,
@@ -14,7 +14,8 @@ use protobuf::plugin::{
     CodeGeneratorResponse as PbCodeGeneratorResponse,
 };
 use rand::Rng;
-use serde_json::{Value as JsonValue, json}; // Import serde_json for JSON handling
+use serde::de;
+use serde_json::{Map as JsonMap, Value as JsonValue, json, to_vec_pretty}; // Import serde_json for JSON handling
 use std::cmp::{max, min};
 use std::collections::HashSet;
 use std::error::Error;
@@ -163,7 +164,8 @@ fn main() -> io::Result<()> {
                 "json" => format!("{}.json", file_stem),
                 _ => format!("{}.bin", file_stem),
             };
-            let mut fake_data_content: Vec<u8> = Vec::new();
+            let mut all_messages: Vec<DynamicMessage> = Vec::new();
+            let mut all_json_messages: Vec<JsonMap<String, JsonValue>> = Vec::new();
             let runtime_file_descriptor = runtime_descriptor_pool.get_file_by_name(filename)
                 .ok_or_else(|| {
                     io::Error::new(
@@ -176,7 +178,7 @@ fn main() -> io::Result<()> {
                 log::debug!(" Message: {}", message_name);
                 let mut message = DynamicMessage::new(message_descr.clone());
                 // Maybe this can be created only if the json flag is set?
-                let mut json_message = serde_json::Map::new();
+                let mut json_message: JsonMap<String, JsonValue> = JsonMap::new();
                 for field_descr in message_descr.fields() {
                     let field_name = field_descr.name();
                     // Whether it is optional, required, or repeated
@@ -184,6 +186,9 @@ fn main() -> io::Result<()> {
                     let field_kind = &field_descr.kind();
                     let is_list_field = field_descr.is_list();
                     let is_map_field = field_descr.is_map();
+
+                    let mut fake_prost_value: Option<Value> = None;
+                    let mut fake_json_value: Option<JsonValue> = None;
                     // --- 4. Find the *corresponding* rust-protobuf FieldDescriptorProto to get options ---
                     // We need to iterate the raw protobuf::descriptor::DescriptorProto (message_type)
                     // and then its field_protos to find the matching field by name.
@@ -260,20 +265,20 @@ fn main() -> io::Result<()> {
                                         )
                                     }
                                 }
+                                if output_format == "json" {
+                                    fake_json_value = Some(JsonValue::Array(json_values));
+                                } else {
+                                    fake_prost_value = Some(Value::List(repeated_values));
+                                }
                             } else if field_cardinality == Cardinality::Required {
                                 // For required fields, we generate a single value
                                 if let Some(fake_value) = get_fake_data(data_type, language) {
                                     let fake_value_for_logging = fake_value.clone();
                                     if output_format == "json" {
-                                        json_message.insert(
-                                            field_name.to_string(),
-                                            json!(fake_value.to_string()),
-                                        );
+                                        fake_json_value = Some(json!(fake_value.to_string()));
                                     } else {
-                                        message.set_field(
-                                            &field_descr,
-                                            fake_value.into_prost_reflect_value(field_kind),
-                                        );
+                                        fake_prost_value =
+                                            Some(fake_value.into_prost_reflect_value(field_kind));
                                     }
                                     log::info!(
                                         "  Field '{}' - fake data type '{}' in '{}' with min '{}' and max'{}':  '{}'",
@@ -299,13 +304,9 @@ fn main() -> io::Result<()> {
                                     if let Some(fake_value) = get_fake_data(data_type, language) {
                                         let fake_value_for_logging = fake_value.clone();
                                         if output_format == "json" {
-                                            json_message.insert(
-                                                field_name.to_string(),
-                                                json!(fake_value.to_string()),
-                                            );
+                                            fake_json_value = Some(json!(fake_value.to_string()));
                                         } else {
-                                            message.set_field(
-                                                &field_descr,
+                                            fake_prost_value = Some(
                                                 fake_value.into_prost_reflect_value(field_kind),
                                             );
                                         }
@@ -333,20 +334,91 @@ fn main() -> io::Result<()> {
                                     )
                                 }
                             } else {
+                                // The field is repeated, but not a list
                                 // Map fields are not supported yet
+                                if output_format == "json" {
+                                    fake_json_value = Some(JsonValue::Object(Default::default()));
+                                } else {
+                                    fake_prost_value = Some(Value::Map(Default::default()));
+                                }
                                 log::warn!(
                                     "Field '{}' has unsupported cardinality mapping: {:?}. Skipping.",
                                     field_name,
                                     is_map_field,
                                 );
                             }
+                        // end of `if let Some(fake_data_option) = fake_data.get(pb_options)`
+                        } else {
+                            log::debug!(
+                                "  Field '{}' has no custom FakeDataFieldOption, populating with defaults.",
+                                field_name
+                            );
+                        }
+                    // end of `if let Some(pb_options) = field_proto.options.as_ref()`
+                    } else {
+                        log::debug!(
+                            "  Field '{}' has no options on it, populating with defaults.",
+                            field_name
+                        );
+                    }
+                    if output_format == "json" {
+                        if let Some(json_value) = fake_json_value {
+                            json_message.insert(field_name.to_string(), json_value);
+                        }
+                    } else {
+                        if let Some(prost_value) = fake_prost_value {
+                            message.set_field(&field_descr, prost_value);
                         }
                     }
                 }
+                if output_format == "json" {
+                    all_json_messages.push(json_message);
+                } else {
+                    all_messages.push(message);
+                }
             }
+            let mut generated_file_content: Vec<u8> = Vec::new();
+            let mut generated_file = protobuf::plugin::code_generator_response::File::new();
+            generated_file.set_name(output_name);
+            if output_format == "json" {
+                generated_file_content = to_vec_pretty(&all_json_messages).map_err(|e| {
+                    io::Error::new(
+                        io::ErrorKind::Other,
+                        format!("Failed to serialize to JSON: {}", e),
+                    )
+                })?;
+                let stringified_content =
+                    String::from_utf8(generated_file_content).map_err(|e| {
+                        io::Error::new(
+                            io::ErrorKind::InvalidData,
+                            format!("Failed to convert UTF-8 bytes to String: {}", e),
+                        )
+                    })?;
+                generated_file.set_content(stringified_content);
+            } else {
+                for next_message in all_messages {
+                    let msg_bytes = next_message.encode_to_vec();
+                    generated_file_content.extend_from_slice(&msg_bytes);
+                }
+            }
+            response.file.push(generated_file);
         }
     }
 
+    // ///////////////////////////////////////////////////
+    // ///
+    //                 let mut generated_file = PbCodeGeneratorResponse::new_file();
+    //                 generated_file.set_name(output_name);
+    //                 if content_is_string {
+    //                     generated_file.set_content(String::from_utf8(generated_file_content)
+    //                         .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, format!("Failed to convert UTF-8 bytes to String for response: {}", e)))?);
+    //                 } else {
+    //                     generated_file.set_content_bytes(generated_file_content);
+    //                 }
+    //                 response.file.push(generated_file);
+    //             } else {
+    //                 log::debug!("Skipping dependency/non-primary file: {}", proto_file_name);
+    // //
     //             // Add a dummy generated file to the response
     //             let mut generated_file = protobuf::plugin::code_generator_response::File::new();
     //             generated_file.set_name(format!("{}.txt", file_name));
