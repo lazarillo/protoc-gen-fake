@@ -1,3 +1,4 @@
+use base64::{Engine as _, engine::general_purpose}; // Import base64 for encoding
 use once_cell::sync::Lazy;
 use prost::{Message, bytes};
 use prost_reflect::{
@@ -19,6 +20,7 @@ use serde_json::{Map as JsonMap, Value as JsonValue, json, to_vec_pretty}; // Im
 use std::cmp::{max, min};
 use std::collections::HashSet;
 use std::error::Error;
+use std::fs;
 use std::io::{self, Read, Write};
 use std::path::Path; // Import Path for file handling // Import locales for fake data generation // Import Lazy for static initialization
 
@@ -62,33 +64,56 @@ fn main() -> io::Result<()> {
     log::debug!("Full CodeGeneratorRequest received: {:#?}", request);
 
     let mut output_format = "protobuf_binary".to_string(); // Default output format
+    let mut output_path = ".".to_string(); // Default output path
     if let Some(params) = request.parameter.as_ref() {
         for param in params.split(',') {
             let key_val = param.split('=').collect::<Vec<&str>>();
-            if key_val.len() == 2 && key_val[0] == "format" {
-                if key_val[1].to_lowercase().starts_with("proto") {
-                    output_format = "protobuf_binary".to_string();
-                    log::info!(
-                        "Parameter input '{}' found, output format set to: {}",
-                        params,
-                        output_format
-                    )
-                } else if key_val[1].to_lowercase().starts_with("json") {
-                    output_format = "json".to_string();
-                    log::info!(
-                        "Parameter input '{}' found, output format set to: {}",
-                        params,
-                        output_format
-                    )
-                } else {
-                    log::warn!(
-                        "Unrecognized output format '{}', defaulting to '{}'",
-                        key_val[1],
-                        output_format
-                    );
+            if key_val.len() == 2 {
+                match key_val[0].to_lowercase().as_str() {
+                    // Check if the parameter is 'format'
+                    "format" => {
+                        if key_val[1].to_lowercase().starts_with("proto") {
+                            output_format = "protobuf_binary".to_string();
+                            log::info!(
+                                "Parameter input '{}' found, output format set to: {}",
+                                params,
+                                output_format
+                            )
+                        } else if key_val[1].to_lowercase().starts_with("json") {
+                            output_format = "json".to_string();
+                            log::info!(
+                                "Parameter input '{}' found, output format set to: {}",
+                                params,
+                                output_format
+                            )
+                        } else {
+                            log::warn!(
+                                "Unrecognized output format '{}', defaulting to '{}'",
+                                key_val[1],
+                                output_format
+                            );
+                        }
+                    }
+                    "output_path" => {
+                        output_path = key_val[1].to_string();
+                        log::info!(
+                            "Parameter input '{}' found, output path set to: {}",
+                            params,
+                            output_path
+                        );
+                    }
+                    _ => {
+                        log::warn!(
+                            "Unrecognized parameter '{}', expected 'format=<value>' or 'output_path=<value>'",
+                            param
+                        );
+                    }
                 }
             } else {
-                log::warn!("Unrecognized parameter '{}', expected 'format=...'", param);
+                log::warn!(
+                    "Unrecognized parameter '{}', expected 'format=<value>' or 'output_path=<value>'",
+                    param
+                );
             }
         }
     } else {
@@ -162,8 +187,18 @@ fn main() -> io::Result<()> {
                 .unwrap_or_default();
             let output_name = match output_format.as_str() {
                 "json" => format!("{}.json", file_stem),
-                _ => format!("{}.bin", file_stem),
+                _ => format!("{}.b64", file_stem),
             };
+            log::warn!(" output_name: {}", output_name);
+            let binary_name = format!(
+                "{}",
+                Path::new(&output_path)
+                    .join(file_stem)
+                    .with_extension("bin")
+                    .to_str()
+                    .unwrap_or("output.bin")
+            );
+            log::warn!(" binary_path: {}", binary_name);
             let mut all_messages: Vec<DynamicMessage> = Vec::new();
             let mut all_json_messages: Vec<JsonMap<String, JsonValue>> = Vec::new();
             let runtime_file_descriptor = runtime_descriptor_pool.get_file_by_name(filename)
@@ -389,15 +424,23 @@ fn main() -> io::Result<()> {
                     })?;
                 generated_file.set_content(stringified_content);
             } else {
+                log::warn!("Here are the key files: {:?}", key_files);
                 for next_message in all_messages {
                     let msg_bytes = next_message.encode_to_vec();
                     generated_file_content.extend_from_slice(&msg_bytes);
                 }
+                fs::write(&binary_name, &generated_file_content)
+                    .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+                log::warn!("Wrote binary to the following path: {:?}", binary_name);
+                let file_content_string = general_purpose::STANDARD.encode(&generated_file_content);
+                generated_file.set_content(file_content_string);
             }
             response.file.push(generated_file);
         }
     }
 
+    // Log raw stdin buffer at TRACE level (only shows with RUST_LOG=trace)
+    log::trace!("Raw stdin buffer (hex): {:x?}", buffer);
     // Encode the CodeGeneratorResponse and write to stdout
     let mut output_buffer = Vec::new();
     response.write_to_vec(&mut output_buffer)?; // Use write_to_vec() for rust-protobuf
