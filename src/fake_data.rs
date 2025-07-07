@@ -10,12 +10,12 @@ use fake::{
 };
 use prost_reflect::{Kind as ProstFieldKind, Value as ProstFieldValue};
 use rand::{Rng, rngs::ThreadRng};
+use serde::Serialize; // Import Serialize trait for JSON serialization
 use std::fmt; // Import Display trait for formatting // Import Rng for random number generation
 
 use std::borrow::Cow; // Import Cow for string handling
 
-// Define your comprehensive enum
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub enum FakeData {
     // Faker-specific types (String variants)
     CityPrefix(String),
@@ -109,6 +109,12 @@ pub enum FakeData {
     // Custom types, still using Faker to generate them
     Age(u32),
     Other(String), // For the default case
+}
+
+impl Default for FakeData {
+    fn default() -> Self {
+        FakeData::Other("".to_string())
+    }
 }
 
 impl fmt::Display for FakeData {
@@ -534,12 +540,6 @@ impl FakeData {
             _ => None,
         }
     }
-    // Custom fakers
-    // Note: These are not from the fake crate, but still return a String
-    // so we can use the same logic to convert them to Cow<str>
-    // (e.g., `FirstName().fake_with_rng(&mut ThreadRng)`).
-    // This is useful for consistency in handling string data.
-    // If you want to handle these differently, you can
 }
 
 macro_rules! generate_faker_match_arms {
@@ -792,31 +792,4 @@ fn main() {
         Some(s) => println!("Generated Name (FR_FR): {}", s),
         _ => unreachable!(),
     }
-
-    // let city_fr = get_fake_data("CityName", FR_FR);
-    // match city_fr {
-    //     // Note: For FR, 'City' might give a French city name, even if imported from en::*
-    //     // This is the beauty of fake_with_context.
-    //     FakeData::CityName(s) => println!("Generated City (FR_FR): {}", s),
-    //     _ => unreachable!(),
-    // }
-
-    // let words_fr = get_fake_data("Words", FR_FR);
-    // match words_fr {
-    //     FakeData::Words(s) => println!("Generated Words (FR_FR): {:?}", s),
-    //     _ => unreachable!(),
-    // }
-
-    // // Example usage with Brazilian Portuguese locale
-    // let name_pt_br = get_fake_data("Name", PT_BR);
-    // match name_pt_br {
-    //     FakeData::Name(s) => println!("Generated Name (PT_BR): {}", s),
-    //     _ => unreachable!(),
-    // }
-
-    // let unknown = get_fake_data("NonExistentType", EN);
-    // match unknown {
-    //     FakeData::Other(s) => println!("Generated Other: {}", s),
-    //     _ => unreachable!(),
-    // }
 }

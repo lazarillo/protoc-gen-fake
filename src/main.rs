@@ -1,3 +1,42 @@
+//! # (Protoc) Gen Fake
+//!
+//! `protoc-gen-fake` is a custom plugin for `protoc` that uses annotation on the proto file schema
+//! to generate a file with fake data well-aligned with the expected data types of the fields.
+//!
+//! It can generate fake data in either JSON or binary format, depending on the request parameters.
+//!
+//! ## Features
+//!
+//! - Generates files with fake data of many common types, such as names, addresses, dates, etc.,
+//!   leveraging the Rust `fake` crate: https://docs.rs/fake/latest/fake/index.html
+//! - Generates fake data in many different languages and regions, defaulting to English.
+//!   All of the languages and types of fake data supported are listed at: <PROVIDE THE GITHUB URL HERE>
+//! - Supports both JSON and binary output formats, with the default being binary.
+//! - Allows owners of the proto files to specify the type of fake data to generate for each field.
+//!
+//! ## Usage
+//!
+//! After installing the plugin, you can use it with `protoc` like this:
+//!
+//! ```bash
+//! protoc --fake_out my_output_dir --fake_opt output=my_output_dir -I proto ./proto/examples/user.proto
+//! ```
+//!
+//! Breaking down the command:
+//! --fake_out: This is where *some of the output* will be written. See `--fake_opt` below for details.
+//!             (`protoc` uses the name of the plugin, after the `protoc-gen-`, as the option name.)
+//! --fake_opt: This is used to pass options to the plugin. Unfortunately, since `protoc` is designed to
+//!             enhance or alter **code generation**, the official output path at `--fake_out` can only
+//!             be used to write text files, not binary files. Therefore, you need to additionally
+//!             supply `--fake_opt output_path=<path>` to specify where the generated protobuf binary
+//!             file(s) should be written. Note: the full flag is `output_path`, but `out` or `output`
+//!             is sufficient.
+//!
+//! ## Options
+//!
+//! It unfortunately needs to use both `prost` and `protobuf` crates to manage this, because`prost` does
+//! not expose custom options, and `protobuf` does not support dynamic messages.
+
 use base64::{Engine as _, engine::general_purpose}; // Import base64 for encoding
 use once_cell::sync::Lazy;
 use prost::{Message, bytes};
@@ -21,8 +60,10 @@ use std::cmp::{max, min};
 use std::collections::HashSet;
 use std::error::Error;
 use std::fs;
+pub mod utils; // Import utility functions for parsing request parameters
 use std::io::{self, Read, Write};
-use std::path::Path; // Import Path for file handling // Import locales for fake data generation // Import Lazy for static initialization
+use std::path::Path;
+use utils::{DataOutputType, get_key_files, parse_request_parameters}; // Import Path for file handling // Import locales for fake data generation // Import Lazy for static initialization
 
 #[path = "./gen_protobuf/fake_field.rs"]
 pub mod generated_proto; // Import the generated protobuf code for custom options
@@ -32,6 +73,7 @@ use crate::generated_proto::exts::fake_data;
 
 pub mod fake_data; // Import your fake data generation logic
 use crate::fake_data::{FakeData, get_fake_data};
+use crate::utils::{get_fake_data_output_value, get_runtime_descriptor_pool};
 
 static OPTION_DESCRIPTOR_POOL: Lazy<DescriptorPool> = Lazy::new(|| {
     // Create a descriptor pool with the fake field option (and descriptor) registered
@@ -41,15 +83,15 @@ static OPTION_DESCRIPTOR_POOL: Lazy<DescriptorPool> = Lazy::new(|| {
 });
 
 fn main() -> io::Result<()> {
+    ///////////////////////////////////////////////////////////////////////////////////
+    /// All of the prep work before looping through the files                       ///
+    ///////////////////////////////////////////////////////////////////////////////////
     // Initialize logging for better debugging output
     env_logger::init(); // RUST_LOG=info, debug, or trace for more detail
 
     // Read the CodeGeneratorRequest from stdin
     let mut buffer = Vec::new();
     io::stdin().read_to_end(&mut buffer)?;
-
-    // Create a random number generator object
-    let mut rng = rand::rng();
 
     // Log raw stdin buffer at TRACE level (only shows with RUST_LOG=trace)
     log::trace!("Raw stdin buffer (hex): {:x?}", buffer);
@@ -58,120 +100,32 @@ fn main() -> io::Result<()> {
     let request = PbCodeGeneratorRequest::parse_from_bytes(&buffer)
         .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
 
-    let request_copy = request.clone();
+    let request_for_file_descriptors = request.clone();
 
     // Log full request at DEBUG level (only shows with RUST_LOG=debug or lower)
     log::debug!("Full CodeGeneratorRequest received: {:#?}", request);
 
-    let mut output_format = "protobuf_binary".to_string(); // Default output format
-    let mut output_path = ".".to_string(); // Default output path
-    if let Some(params) = request.parameter.as_ref() {
-        for param in params.split(',') {
-            let key_val = param.split('=').collect::<Vec<&str>>();
-            if key_val.len() == 2 {
-                match key_val[0].to_lowercase().as_str() {
-                    // Check if the parameter is 'format'
-                    "format" => {
-                        if key_val[1].to_lowercase().starts_with("proto") {
-                            output_format = "protobuf_binary".to_string();
-                            log::info!(
-                                "Parameter input '{}' found, output format set to: {}",
-                                params,
-                                output_format
-                            )
-                        } else if key_val[1].to_lowercase().starts_with("json") {
-                            output_format = "json".to_string();
-                            log::info!(
-                                "Parameter input '{}' found, output format set to: {}",
-                                params,
-                                output_format
-                            )
-                        } else {
-                            log::warn!(
-                                "Unrecognized output format '{}', defaulting to '{}'",
-                                key_val[1],
-                                output_format
-                            );
-                        }
-                    }
-                    "output_path" => {
-                        output_path = key_val[1].to_string();
-                        log::info!(
-                            "Parameter input '{}' found, output path set to: {}",
-                            params,
-                            output_path
-                        );
-                    }
-                    _ => {
-                        log::warn!(
-                            "Unrecognized parameter '{}', expected 'format=<value>' or 'output_path=<value>'",
-                            param
-                        );
-                    }
-                }
-            } else {
-                log::warn!(
-                    "Unrecognized parameter '{}', expected 'format=<value>' or 'output_path=<value>'",
-                    param
-                );
-            }
-        }
-    } else {
-        log::info!(
-            "No parameters provided, using default output format: '{}'",
-            output_format
-        );
-    }
+    // Parse the request parameters to get output format and output path, or populate defaults
+    let (output_format, output_path) = parse_request_parameters(&request);
 
     // Get the set of files to generate (explicitly requested by protoc)
-    let key_files: HashSet<String> = request
-        .file_to_generate
-        .iter()
-        .map(|s_ref| s_ref.clone())
-        .collect();
-
-    let mut response = PbCodeGeneratorResponse::new(); // Use .new() for rust-protobuf messages
+    let key_files = get_key_files(&request);
 
     // Build the runtime descriptor pool, including what is passed by the user
-    log::debug!("Building runtime descriptor pool, including user-provided files");
-    let mut runtime_file_descriptor_set = FileDescriptorSet::default();
-    // Convert between `rust-protobuf` and `prost` types
-    runtime_file_descriptor_set.file = request
-        .proto_file
-        .into_iter()
-        .map(|pb_fd| {
-            let pb_bytes = pb_fd
-                .write_to_bytes()
-                .expect("Failed to serialize PbFileDescriptorProto");
-            prost_types::FileDescriptorProto::decode(pb_bytes.as_ref())
-                .expect("Failed to decode prost_types::FileDescriptorProto")
-        })
-        .collect();
-    let runtime_descriptor_pool =
-        DescriptorPool::from_file_descriptor_set(runtime_file_descriptor_set).map_err(|e| {
-            io::Error::new(
-                io::ErrorKind::InvalidData,
-                format!("Failed to build runtime descriptor pool: {}", e),
-            )
-        })?;
-    log::debug!(
-        "Runtime descriptor pool built successfully with the following {} files: {}",
-        runtime_descriptor_pool.files().len(),
-        runtime_descriptor_pool
-            .files()
-            .map(|f| f.name().to_string())
-            .collect::<Vec<String>>()
-            .join(", ")
-    );
-    // I will need to double check this line immediately below... cannot know until I run it
-    let fake_data_option_descr = OPTION_DESCRIPTOR_POOL
-        .get_extension_by_name("gen_fake.fake_data")
-        .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "Extension 'gen_fake.fake_data' definition not found in static descriptor pool. Ensure fake_field.proto is compiled into DESCRIPTOR_SET_BIN_PATH."))?;
+    let runtime_descriptor_pool = get_runtime_descriptor_pool(&request);
 
-    // Iterate through the key file(s) to use for generating fake data
-    // This is the main entry point for processing the request.
+    // Build the empty response object to populate while iterating through the files
+    let mut response = PbCodeGeneratorResponse::new(); // Use .new() for rust-protobuf messages
+
+    // Create a random number generator object to use for generating fake data
+    let mut rng = rand::rng();
+
+    ///////////////////////////////////////////////////////////////////////////////////
+    // Iterate through the key file(s) to use for generating fake data             ///
+    // This is the main entry point for processing the request.                    ///
+    ///////////////////////////////////////////////////////////////////////////////////
     for filename in key_files.iter() {
-        if let Some(file_descr) = request_copy
+        if let Some(file_descr) = request_for_file_descriptors
             .proto_file
             .iter()
             .find(|f| f.name.as_ref() == Some(filename))
@@ -185,7 +139,7 @@ fn main() -> io::Result<()> {
                 .file_stem()
                 .and_then(|s| s.to_str())
                 .unwrap_or_default();
-            let output_name = match output_format.as_str() {
+            let output_name = match output_format {
                 "json" => format!("{}.json", file_stem),
                 _ => format!("{}.b64", file_stem),
             };
@@ -222,8 +176,7 @@ fn main() -> io::Result<()> {
                     let is_list_field = field_descr.is_list();
                     let is_map_field = field_descr.is_map();
 
-                    let mut fake_prost_value: Option<Value> = None;
-                    let mut fake_json_value: Option<JsonValue> = None;
+                    let mut fake_field_value: Option<DataOutputType> = None;
                     // --- 4. Find the *corresponding* rust-protobuf FieldDescriptorProto to get options ---
                     // We need to iterate the raw protobuf::descriptor::DescriptorProto (message_type)
                     // and then its field_protos to find the matching field by name.
@@ -258,119 +211,74 @@ fn main() -> io::Result<()> {
                             let min_count = max(fake_data_option.min_count, 0);
                             let max_count = max(fake_data_option.max_count, max(min_count, 1));
                             if is_list_field {
+                                // Generate multiple values for list fields
                                 let mut json_values = Vec::new();
                                 let mut repeated_values = Vec::new();
 
                                 let num_values = rng.random_range(min_count..=max_count);
 
                                 for idx in 0..num_values {
-                                    if let Some(fake_value) = get_fake_data(data_type, language) {
-                                        let fake_value_for_logging = fake_value.clone();
-                                        if output_format == "json" {
-                                            json_values.push(json!(&fake_value.to_string()));
-                                        } else {
-                                            repeated_values.push(
-                                                fake_value.into_prost_reflect_value(field_kind),
-                                            );
-                                        }
-                                        log::info!(
-                                            "  Field '{}' - fake data type '{}' in '{}' with min '{}' and max'{}' iteration {}:  '{}'",
-                                            field_name,
-                                            data_type,
-                                            language,
-                                            min_count,
-                                            max_count,
-                                            idx + 1,
-                                            fake_value_for_logging,
-                                        )
-                                    } else {
-                                        log::info!(
-                                            "  Field '{}' - requested fake data of type '{}' in '{}' (iter {}), but failed to generate it",
-                                            field_name,
-                                            data_type,
-                                            language,
-                                            idx + 1,
-                                        )
-                                    }
-                                }
-                                if output_format == "json" {
-                                    fake_json_value = Some(JsonValue::Array(json_values));
-                                } else {
-                                    fake_prost_value = Some(Value::List(repeated_values));
-                                }
-                            } else if field_cardinality == Cardinality::Required {
-                                // For required fields, we generate a single value
-                                if let Some(fake_value) = get_fake_data(data_type, language) {
-                                    let fake_value_for_logging = fake_value.clone();
-                                    if output_format == "json" {
-                                        fake_json_value = Some(json!(fake_value.to_string()));
-                                    } else {
-                                        fake_prost_value =
-                                            Some(fake_value.into_prost_reflect_value(field_kind));
-                                    }
-                                    log::info!(
-                                        "  Field '{}' - fake data type '{}' in '{}' with min '{}' and max'{}':  '{}'",
-                                        field_name,
+                                    let fake_value = get_fake_data_output_value(
                                         data_type,
                                         language,
-                                        min_count,
-                                        max_count,
-                                        fake_value_for_logging
-                                    )
-                                } else {
-                                    log::info!(
-                                        "  Field '{}' - requested fake data of type '{}' in '{}', but failed to generate it",
-                                        field_name,
-                                        data_type,
-                                        language
-                                    )
+                                        output_format,
+                                        field_kind,
+                                    );
+                                    match fake_value {
+                                        DataOutputType::Json(json_value) => {
+                                            json_values.push(json_value);
+                                        }
+                                        DataOutputType::Protobuf(proto_value) => {
+                                            repeated_values.push(proto_value);
+                                        }
+                                    }
                                 }
+                                fake_field_value = match output_format {
+                                    "json" => {
+                                        Some(DataOutputType::Json(JsonValue::Array(json_values)))
+                                    }
+                                    _ => {
+                                        Some(DataOutputType::Protobuf(Value::List(repeated_values)))
+                                    }
+                                };
+                            } else if field_cardinality == Cardinality::Required {
+                                // For required fields, we generate a single value
+                                fake_field_value = Some(get_fake_data_output_value(
+                                    data_type,
+                                    language,
+                                    output_format,
+                                    field_kind,
+                                ));
                             } else if field_cardinality == Cardinality::Optional {
                                 // For optional fields, we generate a single value or leave it unset
                                 let should_generate_value = rng.random_bool(0.5);
                                 if should_generate_value || min_count > 0 {
-                                    if let Some(fake_value) = get_fake_data(data_type, language) {
-                                        let fake_value_for_logging = fake_value.clone();
-                                        if output_format == "json" {
-                                            fake_json_value = Some(json!(fake_value.to_string()));
-                                        } else {
-                                            fake_prost_value = Some(
-                                                fake_value.into_prost_reflect_value(field_kind),
-                                            );
-                                        }
-                                        log::info!(
-                                            "  Field '{}' - fake data type '{}' in '{}' with min '{}' and max'{}':  '{}'",
-                                            field_name,
-                                            data_type,
-                                            language,
-                                            min_count,
-                                            max_count,
-                                            fake_value_for_logging
-                                        )
-                                    } else {
-                                        log::info!(
-                                            "  Field '{}' - requested fake data of type '{}' in '{}', but failed to generate it",
-                                            field_name,
-                                            data_type,
-                                            language
-                                        )
-                                    }
+                                    fake_field_value = Some(get_fake_data_output_value(
+                                        data_type,
+                                        language,
+                                        output_format,
+                                        field_kind,
+                                    ));
                                 } else {
-                                    log::info!(
-                                        "  Field '{}' is optional, not generating value (50% chance)",
-                                        field_name
-                                    )
+                                    fake_field_value = None::<DataOutputType>; // Leave it unset
                                 }
                             } else {
                                 // The field is repeated, but not a list
                                 // Map fields are not supported yet
-                                if output_format == "json" {
-                                    fake_json_value = Some(JsonValue::Object(Default::default()));
-                                } else {
-                                    fake_prost_value = Some(Value::Map(Default::default()));
-                                }
+                                fake_field_value = match output_format {
+                                    "json" => {
+                                        Some(DataOutputType::Json(JsonValue::Object(
+                                            Default::default(),
+                                        ))) // Placeholder for JSON
+                                    }
+                                    _ => {
+                                        Some(DataOutputType::Protobuf(Value::Map(
+                                            Default::default(),
+                                        ))) // Placeholder for Protobuf
+                                    }
+                                };
                                 log::warn!(
-                                    "Field '{}' has unsupported cardinality mapping: {:?}. Skipping.",
+                                    "Field '{}' has unsupported cardinality mapping: {:?}. Using defaults.",
                                     field_name,
                                     is_map_field,
                                 );
@@ -378,31 +286,39 @@ fn main() -> io::Result<()> {
                         // end of `if let Some(fake_data_option) = fake_data.get(pb_options)`
                         } else {
                             log::debug!(
-                                "  Field '{}' has no custom FakeDataFieldOption, populating with defaults.",
+                                "  Field '{}' has no custom FakeDataFieldOption, skipping.",
                                 field_name
                             );
                         }
                     // end of `if let Some(pb_options) = field_proto.options.as_ref()`
                     } else {
-                        log::debug!(
-                            "  Field '{}' has no options on it, populating with defaults.",
-                            field_name
-                        );
+                        log::debug!("  Field '{}' has no options on it, skipping.", field_name);
                     }
-                    if output_format == "json" {
-                        if let Some(json_value) = fake_json_value {
-                            json_message.insert(field_name.to_string(), json_value);
+                    match fake_field_value {
+                        Some(DataOutputType::Json(fake_value)) => {
+                            // Insert the JSON field value into the json_message
+                            json_message.insert(field_name.to_string(), fake_value);
                         }
-                    } else {
-                        if let Some(prost_value) = fake_prost_value {
-                            message.set_field(&field_descr, prost_value);
+                        Some(DataOutputType::Protobuf(fake_value)) => {
+                            // Insert the Protobuf field value into the message
+                            message.set_field(&field_descr, fake_value)
+                        }
+                        None => {
+                            // If no fake data was generated, we can skip setting the field
+                            log::debug!(
+                                "  Field '{}' has no fake data generated, skipping.",
+                                field_name
+                            );
                         }
                     }
                 }
-                if output_format == "json" {
-                    all_json_messages.push(json_message);
-                } else {
-                    all_messages.push(message);
+                match output_format {
+                    "json" => {
+                        all_json_messages.push(json_message);
+                    }
+                    _ => {
+                        all_messages.push(message);
+                    }
                 }
             }
             let mut generated_file_content: Vec<u8> = Vec::new();
