@@ -1,12 +1,11 @@
 use fake::{
     Fake, // Import specific locale instances directly from `fake::locales`
     faker::{
-        address::raw::*, administrative::raw::*, automotive::raw::*, barcode::raw::*,
-        boolean::raw::*, chrono::raw::*, company::raw::*, creditcard::raw::*, currency::raw::*,
-        filesystem::raw::*, finance::raw::*, impls::*, internet::raw::*, job::raw::*,
-        lorem::raw::*, name::raw::*, number::raw::*, phone_number::raw::*,
+        address::raw::*, barcode::raw::*, chrono::raw::*, company::raw::*, creditcard::raw::*,
+        currency::raw::*, filesystem::raw::*, finance::raw::*, internet::raw::*, job::raw::*,
+        lorem::raw::*, name::raw::*, phone_number::raw::*,
     },
-    locales::{AR_SA, DE_DE, Data, EN, FR_FR, IT_IT, JA_JP, PT_BR, PT_PT, ZH_CN, ZH_TW},
+    locales::{AR_SA, DE_DE, EN, FR_FR, IT_IT, JA_JP, PT_BR, PT_PT, ZH_CN, ZH_TW},
 };
 use prost_reflect::{Kind as ProstFieldKind, Value as ProstFieldValue};
 use rand::{Rng, rngs::ThreadRng};
@@ -670,15 +669,6 @@ pub fn get_fake_data(data_type: &str, language: &str) -> Option<FakeData> {
             ("Suffix", Suffix, Suffix),
             ("Name", Name, Name),
             ("NameWithTitle", NameWithTitle, NameWithTitle),
-            ("Seniority", Seniority, Seniority),
-            ("Field", Field, Field),
-            ("Position", Position, Position),
-            ("Semver", Semver, Semver),
-            ("SemverStable", SemverStable, SemverStable),
-            ("SemverUnstable", SemverUnstable, SemverUnstable),
-            ("Isbn", Isbn, Isbn),
-            ("Isbn10", Isbn10, Isbn10),
-            ("Isbn13", Isbn13, Isbn13),
             ("CreditCardNumber", CreditCardNumber, CreditCardNumber),
             ("CompanySuffix", CompanySuffix, CompanySuffix),
             ("CompanyName", CompanyName, CompanyName),
@@ -768,28 +758,4 @@ pub fn get_fake_data(data_type: &str, language: &str) -> Option<FakeData> {
         return Some(FakeData::Age(rand::rng().random_range(8..90)));
     }
     None
-}
-
-fn main() {
-    // SafeEmail().fake_with_rng(&mut ThreadRng::default());
-
-    // Example usage with EN locale
-    let name_en: Option<FakeData> = get_fake_data("FirstName", "English");
-    match name_en {
-        Some(s) => println!("Generated Name (EN): {}", s),
-        _ => unreachable!(),
-    }
-
-    let city_en = get_fake_data("CityName", "English");
-    match city_en {
-        Some(s) => println!("Generated City (EN): {}", s),
-        _ => unreachable!(),
-    }
-
-    // Example usage with French locale
-    let name_fr = get_fake_data("Name", "French");
-    match name_fr {
-        Some(s) => println!("Generated Name (FR_FR): {}", s),
-        _ => unreachable!(),
-    }
 }

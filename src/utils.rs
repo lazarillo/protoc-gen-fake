@@ -1,17 +1,12 @@
 use prost::Message as _;
-use prost_reflect::{
-    Cardinality, DescriptorPool, DynamicMessage, ExtensionDescriptor, FieldDescriptor,
-    FileDescriptor, Kind as ProstFieldKind, MessageDescriptor, Value,
-};
-use prost_types::compiler::code_generator_response::File;
-use prost_types::{FileDescriptorProto, FileDescriptorSet, field};
+use prost_reflect::{DescriptorPool, Kind as ProstFieldKind, Value};
+use prost_types::{FileDescriptorProto, FileDescriptorSet};
 use protobuf::Message as _;
 use protobuf::plugin::CodeGeneratorRequest;
-use serde_json::{Value as JsonValue, json, to_value as to_json_value};
+use serde_json::{Value as JsonValue, to_value as to_json_value};
 use std::collections::HashSet;
-use std::f32::consts::E;
 use std::io;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use crate::fake_data::get_fake_data;
 
@@ -174,7 +169,6 @@ pub fn get_fake_data_output_value(
                     );
                 }
                 None => {
-                    let fake_value = Value::default_value(field_kind);
                     log::info!(
                         "    No fake data found for type '{}' in '{}'",
                         data_type,

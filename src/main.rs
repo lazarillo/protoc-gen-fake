@@ -37,28 +37,17 @@
 //! It unfortunately needs to use both `prost` and `protobuf` crates to manage this, because`prost` does
 //! not expose custom options, and `protobuf` does not support dynamic messages.
 
-use base64::{Engine as _, engine::general_purpose}; // Import base64 for encoding
-use once_cell::sync::Lazy;
-use prost::{Message, bytes};
-use prost_reflect::{
-    Cardinality, DescriptorPool, DynamicMessage, ExtensionDescriptor, FieldDescriptor,
-    FileDescriptor, Kind as ProstFieldKind, MessageDescriptor, Value,
-};
-use prost_types::{FileDescriptorSet, field};
+use base64::{Engine as _, engine::general_purpose};
+use prost::Message;
+use prost_reflect::{Cardinality, DynamicMessage, Value};
 use protobuf::Message as PbMessage;
-use protobuf::descriptor::{
-    FieldOptions as PbFieldOptions, FileDescriptorProto as PbFileDescriptorProto,
-};
 use protobuf::plugin::{
     CodeGeneratorRequest as PbCodeGeneratorRequest,
     CodeGeneratorResponse as PbCodeGeneratorResponse,
 };
 use rand::Rng;
-use serde::de;
-use serde_json::{Map as JsonMap, Value as JsonValue, json, to_vec_pretty}; // Import serde_json for JSON handling
-use std::cmp::{max, min};
-use std::collections::HashSet;
-use std::error::Error;
+use serde_json::{Map as JsonMap, Value as JsonValue, to_vec_pretty}; // Import serde_json for JSON handling
+use std::cmp::max;
 use std::fs;
 pub mod utils; // Import utility functions for parsing request parameters
 use std::io::{self, Read, Write};
@@ -68,23 +57,14 @@ use utils::{DataOutputType, get_key_files, parse_request_parameters}; // Import 
 #[path = "./gen_protobuf/fake_field.rs"]
 pub mod generated_proto; // Import the generated protobuf code for custom options
 
-use crate::generated_proto::FakeDataFieldOption;
 use crate::generated_proto::exts::fake_data;
 
-pub mod fake_data; // Import your fake data generation logic
-use crate::fake_data::{FakeData, get_fake_data};
+pub mod fake_data;
 use crate::utils::{get_fake_data_output_value, get_runtime_descriptor_pool};
-
-static OPTION_DESCRIPTOR_POOL: Lazy<DescriptorPool> = Lazy::new(|| {
-    // Create a descriptor pool with the fake field option (and descriptor) registered
-    let descriptor_set = include_bytes!(env!("DESCRIPTOR_SET_BIN_PATH"));
-    DescriptorPool::decode(descriptor_set.as_ref())
-        .expect("Failed to decode compiled descriptor set with fake field options")
-});
 
 fn main() -> io::Result<()> {
     ///////////////////////////////////////////////////////////////////////////////////
-    /// All of the prep work before looping through the files                       ///
+    // All of the prep work before looping through the files                       ///
     ///////////////////////////////////////////////////////////////////////////////////
     // Initialize logging for better debugging output
     env_logger::init(); // RUST_LOG=info, debug, or trace for more detail
@@ -217,7 +197,7 @@ fn main() -> io::Result<()> {
 
                                 let num_values = rng.random_range(min_count..=max_count);
 
-                                for idx in 0..num_values {
+                                for _ in 0..num_values {
                                     let fake_value = get_fake_data_output_value(
                                         data_type,
                                         language,
