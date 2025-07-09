@@ -759,3 +759,121 @@ pub fn get_fake_data(data_type: &str, language: &str) -> Option<FakeData> {
     }
     None
 }
+
+#[cfg(test)] // This attribute tells Cargo to compile and run the test only when `cargo test` is run.
+mod fake_data_tests {
+    use super::*; // Import everything from the outer scope (the crate root)
+
+    /// Test `get_fake_data` with a known string data type and default language.
+    #[test]
+    fn test_get_fake_data_first_name_en() {
+        let fake_name = get_fake_data("FirstName", "en");
+        assert!(fake_name.is_some()); // Assert that a value was returned
+        if let Some(FakeData::FirstName(name)) = fake_name {
+            assert!(!name.is_empty()); // Assert the generated name is not empty
+        // You could add more specific checks here if you knew the expected format,
+        // e.g., regex for names, but for random data, non-empty is a good start.
+        } else {
+            panic!("Expected FakeData::FirstName variant"); // Fail if it's not the expected variant
+        }
+    }
+
+    /// Test `get_fake_data` with a numeric data type ("Age").
+    #[test]
+    fn test_get_fake_data_age() {
+        let fake_age = get_fake_data("Age", "en");
+        assert!(fake_age.is_some());
+        if let Some(FakeData::Age(age)) = fake_age {
+            assert!(age >= 8 && age <= 90); // Check if age is within the expected range
+        } else {
+            panic!("Expected FakeData::Age variant");
+        }
+    }
+
+    /// Test `get_fake_data` with a list-based data type ("Words").
+    #[test]
+    fn test_get_fake_data_words() {
+        let fake_words = get_fake_data("Words", "en");
+        assert!(fake_words.is_some());
+        if let Some(FakeData::Words(words)) = fake_words {
+            assert!(!words.is_empty()); // Ensure the list of words is not empty
+            assert!(words.len() <= 10); // Check if the number of words is within the range 0..10
+            for word in words {
+                assert!(!word.is_empty()); // Ensure each word is not empty
+            }
+        } else {
+            panic!("Expected FakeData::Words variant");
+        }
+    }
+
+    /// Test `get_fake_data` with an unsupported data type.
+    #[test]
+    fn test_get_fake_data_unsupported_type() {
+        let fake_data = get_fake_data("UnsupportedType", "en");
+        assert!(fake_data.is_none()); // Expect None for unsupported types
+    }
+
+    /// Test `get_fake_data` with a different language (German).
+    #[test]
+    fn test_get_fake_data_city_de() {
+        let fake_city = get_fake_data("CityName", "de");
+        assert!(fake_city.is_some());
+        if let Some(FakeData::CityName(city)) = fake_city {
+            assert!(!city.is_empty());
+            // More specific checks for German city names could be added if needed
+        } else {
+            panic!("Expected FakeData::CityName variant");
+        }
+    }
+
+    /// Test `FakeData::into_string` for a simple string type.
+    #[test]
+    fn test_fake_data_into_string_city_prefix() {
+        let fake_data = FakeData::CityPrefix("North".to_string());
+        assert_eq!(fake_data.into_string(), "North".to_string());
+    }
+
+    /// Test `FakeData::into_string` for an Age type.
+    #[test]
+    fn test_fake_data_into_string_age() {
+        let fake_data = FakeData::Age(30);
+        assert_eq!(fake_data.into_string(), "30".to_string());
+    }
+
+    /// Test `FakeData::into_string` for a Words type.
+    #[test]
+    fn test_fake_data_into_string_words() {
+        let fake_data = FakeData::Words(vec!["hello".to_string(), "world".to_string()]);
+        assert_eq!(fake_data.into_string(), "hello world".to_string());
+    }
+
+    /// Test `FakeData::into_prost_reflect_value` for a String kind.
+    #[test]
+    fn test_fake_data_into_prost_reflect_value_string() {
+        let fake_data = FakeData::FirstName("John".to_string());
+        let prost_value = fake_data.into_prost_reflect_value(&ProstFieldKind::String);
+        assert_eq!(prost_value, ProstFieldValue::String("John".to_string()));
+    }
+
+    /// Test `FakeData::into_prost_reflect_value` for an Int32 kind with Age.
+    #[test]
+    fn test_fake_data_into_prost_reflect_value_int32() {
+        let fake_data = FakeData::Age(25);
+        let prost_value = fake_data.into_prost_reflect_value(&ProstFieldKind::Int32);
+        assert_eq!(prost_value, ProstFieldValue::I32(25));
+    }
+
+    /// Test `FakeData::into_prost_reflect_value` for a List of Strings.
+    #[test]
+    fn test_fake_data_into_prost_reflect_value_list_string() {
+        let fake_data = FakeData::Words(vec!["one".to_string(), "two".to_string()]);
+        let prost_value = fake_data.into_prost_reflect_value(&ProstFieldKind::String);
+        assert_eq!(
+            prost_value,
+            ProstFieldValue::List(vec![
+                ProstFieldValue::String("one".to_string()),
+                ProstFieldValue::String("two".to_string()),
+            ])
+        );
+    }
+}

@@ -52,7 +52,7 @@ use std::fs;
 pub mod utils; // Import utility functions for parsing request parameters
 use std::io::{self, Read, Write};
 use std::path::Path;
-use utils::{DataOutputType, get_key_files, parse_request_parameters}; // Import Path for file handling // Import locales for fake data generation // Import Lazy for static initialization
+use utils::{DataOutputType, DesiredOutputFormat, get_key_files, parse_request_parameters}; // Import Path for file handling // Import locales for fake data generation // Import Lazy for static initialization
 
 #[path = "./gen_protobuf/fake_field.rs"]
 pub mod generated_proto; // Import the generated protobuf code for custom options
@@ -63,9 +63,9 @@ pub mod fake_data;
 use crate::utils::{get_fake_data_output_value, get_runtime_descriptor_pool};
 
 fn main() -> io::Result<()> {
-    ///////////////////////////////////////////////////////////////////////////////////
+    //////////////////////////////////////////////////////////////////////////////////
     // All of the prep work before looping through the files                       ///
-    ///////////////////////////////////////////////////////////////////////////////////
+    //////////////////////////////////////////////////////////////////////////////////
     // Initialize logging for better debugging output
     env_logger::init(); // RUST_LOG=info, debug, or trace for more detail
 
@@ -79,8 +79,6 @@ fn main() -> io::Result<()> {
     // Decode the request using protobuf::Message::parse_from_bytes
     let request = PbCodeGeneratorRequest::parse_from_bytes(&buffer)
         .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
-
-    let request_for_file_descriptors = request.clone();
 
     // Log full request at DEBUG level (only shows with RUST_LOG=debug or lower)
     log::debug!("Full CodeGeneratorRequest received: {:#?}", request);
@@ -100,38 +98,31 @@ fn main() -> io::Result<()> {
     // Create a random number generator object to use for generating fake data
     let mut rng = rand::rng();
 
-    ///////////////////////////////////////////////////////////////////////////////////
+    //////////////////////////////////////////////////////////////////////////////////
     // Iterate through the key file(s) to use for generating fake data             ///
     // This is the main entry point for processing the request.                    ///
-    ///////////////////////////////////////////////////////////////////////////////////
+    //////////////////////////////////////////////////////////////////////////////////
     for filename in key_files.iter() {
-        if let Some(file_descr) = request_for_file_descriptors
+        if let Some(file_descr) = request
             .proto_file
             .iter()
             .find(|f| f.name.as_ref() == Some(filename))
         {
-            log::info!(
-                "Processing file of interest: {}",
-                filename // file_descr.name.as_deref().unwrap_or_default()
-            );
+            log::info!("Processing file of interest: {}", filename);
             let output_file_path = Path::new(filename);
             let file_stem = output_file_path
                 .file_stem()
                 .and_then(|s| s.to_str())
                 .unwrap_or_default();
             let output_name = match output_format {
-                "json" => format!("{}.json", file_stem),
+                DesiredOutputFormat::Json => format!("{}.json", file_stem),
                 _ => format!("{}.b64", file_stem),
             };
             log::warn!(" output_name: {}", output_name);
-            let binary_name = format!(
-                "{}",
-                Path::new(&output_path)
-                    .join(file_stem)
-                    .with_extension("bin")
-                    .to_str()
-                    .unwrap_or("output.bin")
-            );
+            let binary_path = Path::new(&output_path)
+                .join(file_stem)
+                .with_extension("bin");
+            let binary_name = binary_path.to_str().unwrap_or("output.bin");
             log::warn!(" binary_path: {}", binary_name);
             let mut all_messages: Vec<DynamicMessage> = Vec::new();
             let mut all_json_messages: Vec<JsonMap<String, JsonValue>> = Vec::new();
@@ -142,6 +133,9 @@ fn main() -> io::Result<()> {
                         format!("File '{}' not found in (`prost-reflect`) runtime descriptor pool. This should not happen if {} is valid", filename, filename),
                     )
                 })?;
+            ////////////////////////////////////////////////////////////////////////////
+            // Iterate through the messages in the key files                         ///
+            ////////////////////////////////////////////////////////////////////////////
             for message_descr in runtime_file_descriptor.messages() {
                 let message_name = message_descr.name();
                 log::debug!(" Message: {}", message_name);
@@ -157,9 +151,6 @@ fn main() -> io::Result<()> {
                     let is_map_field = field_descr.is_map();
 
                     let mut fake_field_value: Option<DataOutputType> = None;
-                    // --- 4. Find the *corresponding* rust-protobuf FieldDescriptorProto to get options ---
-                    // We need to iterate the raw protobuf::descriptor::DescriptorProto (message_type)
-                    // and then its field_protos to find the matching field by name.
                     let message_proto = file_descr
                         .message_type
                         .iter()
@@ -201,7 +192,7 @@ fn main() -> io::Result<()> {
                                     let fake_value = get_fake_data_output_value(
                                         data_type,
                                         language,
-                                        output_format,
+                                        &output_format,
                                         field_kind,
                                     );
                                     match fake_value {
@@ -214,7 +205,7 @@ fn main() -> io::Result<()> {
                                     }
                                 }
                                 fake_field_value = match output_format {
-                                    "json" => {
+                                    DesiredOutputFormat::Json => {
                                         Some(DataOutputType::Json(JsonValue::Array(json_values)))
                                     }
                                     _ => {
@@ -226,7 +217,7 @@ fn main() -> io::Result<()> {
                                 fake_field_value = Some(get_fake_data_output_value(
                                     data_type,
                                     language,
-                                    output_format,
+                                    &output_format,
                                     field_kind,
                                 ));
                             } else if field_cardinality == Cardinality::Optional {
@@ -236,7 +227,7 @@ fn main() -> io::Result<()> {
                                     fake_field_value = Some(get_fake_data_output_value(
                                         data_type,
                                         language,
-                                        output_format,
+                                        &output_format,
                                         field_kind,
                                     ));
                                 } else {
@@ -246,7 +237,7 @@ fn main() -> io::Result<()> {
                                 // The field is repeated, but not a list
                                 // Map fields are not supported yet
                                 fake_field_value = match output_format {
-                                    "json" => {
+                                    DesiredOutputFormat::Json => {
                                         Some(DataOutputType::Json(JsonValue::Object(
                                             Default::default(),
                                         ))) // Placeholder for JSON
@@ -293,7 +284,7 @@ fn main() -> io::Result<()> {
                     }
                 }
                 match output_format {
-                    "json" => {
+                    DesiredOutputFormat::Json => {
                         all_json_messages.push(json_message);
                     }
                     _ => {
@@ -304,7 +295,7 @@ fn main() -> io::Result<()> {
             let mut generated_file_content: Vec<u8> = Vec::new();
             let mut generated_file = protobuf::plugin::code_generator_response::File::new();
             generated_file.set_name(output_name);
-            if output_format == "json" {
+            if output_format == DesiredOutputFormat::Json {
                 generated_file_content = to_vec_pretty(&all_json_messages).map_err(|e| {
                     io::Error::new(
                         io::ErrorKind::Other,
@@ -335,8 +326,6 @@ fn main() -> io::Result<()> {
         }
     }
 
-    // Log raw stdin buffer at TRACE level (only shows with RUST_LOG=trace)
-    log::trace!("Raw stdin buffer (hex): {:x?}", buffer);
     // Encode the CodeGeneratorResponse and write to stdout
     let mut output_buffer = Vec::new();
     response.write_to_vec(&mut output_buffer)?; // Use write_to_vec() for rust-protobuf
