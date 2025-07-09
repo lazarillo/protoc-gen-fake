@@ -4,10 +4,14 @@ package examples;
 import "gen_fake/fake_field.proto";
 
 message Address {
+  Street street = 1;
+  string city = 2 [(gen_fake.fake_data).data_type = "CityName"];
+  string country = 3 [(gen_fake.fake_data).data_type = "CountryName"];
   message Street {
     uint32 number = 1 [(gen_fake.fake_data).data_type = "WholeNumber"];
     string name = 2 [(gen_fake.fake_data).data_type =  "StreetName"];
   }
+
 
   string street
   

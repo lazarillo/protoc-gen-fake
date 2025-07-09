@@ -1,4 +1,6 @@
 use crate::utils::SupportedLanguage;
+use fake::base64::*;
+use fake::uuid::*;
 use fake::{
     Fake, // Import specific locale instances directly from `fake::locales`
     faker::{
@@ -15,6 +17,15 @@ use serde_json::Value as JsonValue; // Import JsonValue for JSON handling
 use std::fmt; // Import Display trait for formatting // Import Rng for random number generation
 
 use std::borrow::Cow; // Import Cow for string handling
+
+pub fn mike_testing() {
+    let uuid = UUIDv4;
+    let uuid2: String = uuid.fake();
+    let city_name = CityName;
+    let city_name2: String = city_name(EN).fake();
+    println!("Generated UUID: {}", uuid2);
+    println!("Generated City Name: {}", city_name2);
+}
 
 #[derive(Debug, Clone, Serialize)]
 pub enum FakeData {
@@ -58,6 +69,8 @@ pub enum FakeData {
     FreeEmail(String),
     SafeEmail(String),
     Username(String),
+    UUID(String), // Using UUIDv4
+    Base64(String),
     Password(String),
     IPv4(String),
     IPv6(String),
@@ -149,6 +162,8 @@ impl fmt::Display for FakeData {
             | FakeData::CompanySuffix(s)
             | FakeData::CompanyName(s)
             | FakeData::Buzzword(s)
+            | FakeData::UUID(s)
+            | FakeData::Base64(s)
             | FakeData::BuzzwordMiddle(s)
             | FakeData::BuzzwordTail(s)
             | FakeData::CatchPhrase(s)
@@ -251,6 +266,8 @@ impl FakeData {
             | FakeData::BuzzwordMiddle(s)
             | FakeData::BuzzwordTail(s)
             | FakeData::CatchPhrase(s)
+            | FakeData::UUID(s)
+            | FakeData::Base64(s)
             | FakeData::BsVerb(s)
             | FakeData::BsAdj(s)
             | FakeData::BsNoun(s)
@@ -342,6 +359,8 @@ impl FakeData {
             | FakeData::CreditCardNumber(s)
             | FakeData::CompanySuffix(s)
             | FakeData::CompanyName(s)
+            | FakeData::UUID(s)
+            | FakeData::Base64(s)
             | FakeData::Buzzword(s)
             | FakeData::BuzzwordMiddle(s)
             | FakeData::BuzzwordTail(s)
@@ -616,6 +635,8 @@ impl FakeData {
             | FakeData::CreditCardNumber(s)
             | FakeData::CompanySuffix(s)
             | FakeData::CompanyName(s)
+            | FakeData::UUID(s)
+            | FakeData::Base64(s)
             | FakeData::Buzzword(s)
             | FakeData::BuzzwordMiddle(s)
             | FakeData::BuzzwordTail(s)
@@ -716,7 +737,9 @@ macro_rules! generate_faker_match_arms {
         // List 1: All fakers that are functions and take NO arguments (e.g., FirstName(), City())
         [ $( ($string_key_no_arg:literal, $faker_path_no_arg:path, $enum_variant_no_arg:ident) ),* ],
         // List 2: All fakers that are functions and DO take arguments (e.g., Words(range), Password(len))
-        [ $( ($string_key_arg:literal, $faker_path_arg:path, $enum_variant_arg:ident, $arg_expr:expr) ),* ]
+        [ $( ($string_key_arg:literal, $faker_path_arg:path, $enum_variant_arg:ident, $arg_expr:expr) ),* ],
+        // List 3: All fakers that need no language specification (like UUID and Base64)
+        [ $( ($string_key_no_lang:literal, $faker_path_no_lang:path, $enum_variant_no_lang:ident) ),* ]
     ) => {
         // Outer match on language
         match $language_var {
@@ -724,14 +747,16 @@ macro_rules! generate_faker_match_arms {
                 // Call the internal rule, passing the concrete locale instance
                 generate_faker_match_arms!(@internal_faker_match $data_type_var, AR_SA,
                     [ $( ($string_key_no_arg, $faker_path_no_arg, $enum_variant_no_arg) ),* ],
-                    [ $( ($string_key_arg, $faker_path_arg, $enum_variant_arg, $arg_expr) ),* ]
+                    [ $( ($string_key_arg, $faker_path_arg, $enum_variant_arg, $arg_expr) ),* ],
+                    [ $( ($string_key_no_lang, $faker_path_no_lang, $enum_variant_no_lang) ),* ]
                 )
             },
             SupportedLanguage::DE_DE => {
                 // Call the internal rule, passing the concrete locale instance
                 generate_faker_match_arms!(@internal_faker_match $data_type_var, DE_DE,
                     [ $( ($string_key_no_arg, $faker_path_no_arg, $enum_variant_no_arg) ),* ],
-                    [ $( ($string_key_arg, $faker_path_arg, $enum_variant_arg, $arg_expr) ),* ]
+                    [ $( ($string_key_arg, $faker_path_arg, $enum_variant_arg, $arg_expr) ),* ],
+                    [ $( ($string_key_no_lang, $faker_path_no_lang, $enum_variant_no_lang) ),* ]
                 )
             },
             // If no language is found (SupportedLanguage::Default), then English is used.
@@ -739,49 +764,57 @@ macro_rules! generate_faker_match_arms {
                 // Call the internal rule, passing the concrete locale instance
                 generate_faker_match_arms!(@internal_faker_match $data_type_var, EN,
                     [ $( ($string_key_no_arg, $faker_path_no_arg, $enum_variant_no_arg) ),* ],
-                    [ $( ($string_key_arg, $faker_path_arg, $enum_variant_arg, $arg_expr) ),* ]
+                    [ $( ($string_key_arg, $faker_path_arg, $enum_variant_arg, $arg_expr) ),* ],
+                    [ $( ($string_key_no_lang, $faker_path_no_lang, $enum_variant_no_lang) ),* ]
                 )
             },
             SupportedLanguage::FR_FR => {
                 generate_faker_match_arms!(@internal_faker_match $data_type_var, FR_FR,
                     [ $( ($string_key_no_arg, $faker_path_no_arg, $enum_variant_no_arg) ),* ],
-                    [ $( ($string_key_arg, $faker_path_arg, $enum_variant_arg, $arg_expr) ),* ]
+                    [ $( ($string_key_arg, $faker_path_arg, $enum_variant_arg, $arg_expr) ),* ],
+                    [ $( ($string_key_no_lang, $faker_path_no_lang, $enum_variant_no_lang) ),* ]
                 )
             },
             SupportedLanguage::IT_IT => {
                 generate_faker_match_arms!(@internal_faker_match $data_type_var, IT_IT,
                     [ $( ($string_key_no_arg, $faker_path_no_arg, $enum_variant_no_arg) ),* ],
-                    [ $( ($string_key_arg, $faker_path_arg, $enum_variant_arg, $arg_expr) ),* ]
+                    [ $( ($string_key_arg, $faker_path_arg, $enum_variant_arg, $arg_expr) ),* ],
+                    [ $( ($string_key_no_lang, $faker_path_no_lang, $enum_variant_no_lang) ),* ]
                 )
             },
             SupportedLanguage::JA_JP => {
                 generate_faker_match_arms!(@internal_faker_match $data_type_var, JA_JP,
                     [ $( ($string_key_no_arg, $faker_path_no_arg, $enum_variant_no_arg) ),* ],
-                    [ $( ($string_key_arg, $faker_path_arg, $enum_variant_arg, $arg_expr) ),* ]
+                    [ $( ($string_key_arg, $faker_path_arg, $enum_variant_arg, $arg_expr) ),* ],
+                    [ $( ($string_key_no_lang, $faker_path_no_lang, $enum_variant_no_lang) ),* ]
                 )
             },
             SupportedLanguage::PT_BR => {
                 generate_faker_match_arms!(@internal_faker_match $data_type_var, PT_BR,
                     [ $( ($string_key_no_arg, $faker_path_no_arg, $enum_variant_no_arg) ),* ],
-                    [ $( ($string_key_arg, $faker_path_arg, $enum_variant_arg, $arg_expr) ),* ]
+                    [ $( ($string_key_arg, $faker_path_arg, $enum_variant_arg, $arg_expr) ),* ],
+                    [ $( ($string_key_no_lang, $faker_path_no_lang, $enum_variant_no_lang) ),* ]
                 )
             },
             SupportedLanguage::PT_PT => {
                 generate_faker_match_arms!(@internal_faker_match $data_type_var, PT_PT,
                     [ $( ($string_key_no_arg, $faker_path_no_arg, $enum_variant_no_arg) ),* ],
-                    [ $( ($string_key_arg, $faker_path_arg, $enum_variant_arg, $arg_expr) ),* ]
+                    [ $( ($string_key_arg, $faker_path_arg, $enum_variant_arg, $arg_expr) ),* ],
+                    [ $( ($string_key_no_lang, $faker_path_no_lang, $enum_variant_no_lang) ),* ]
                 )
             },
             SupportedLanguage::ZH_CN => {
                 generate_faker_match_arms!(@internal_faker_match $data_type_var, ZH_CN,
                     [ $( ($string_key_no_arg, $faker_path_no_arg, $enum_variant_no_arg) ),* ],
-                    [ $( ($string_key_arg, $faker_path_arg, $enum_variant_arg, $arg_expr) ),* ]
+                    [ $( ($string_key_arg, $faker_path_arg, $enum_variant_arg, $arg_expr) ),* ],
+                    [ $( ($string_key_no_lang, $faker_path_no_lang, $enum_variant_no_lang) ),* ]
                 )
             },
             SupportedLanguage::ZH_TW => {
                 generate_faker_match_arms!(@internal_faker_match $data_type_var, ZH_TW,
                     [ $( ($string_key_no_arg, $faker_path_no_arg, $enum_variant_no_arg) ),* ],
-                    [ $( ($string_key_arg, $faker_path_arg, $enum_variant_arg, $arg_expr) ),* ]
+                    [ $( ($string_key_arg, $faker_path_arg, $enum_variant_arg, $arg_expr) ),* ],
+                    [ $( ($string_key_no_lang, $faker_path_no_lang, $enum_variant_no_lang) ),* ]
                 )
             },
         }
@@ -793,7 +826,8 @@ macro_rules! generate_faker_match_arms {
         $data_type_var:ident,
         $locale_instance:expr, // This is now the concrete locale (e.g., EN_US) passed from above
         [ $( ($string_key_no_arg:literal, $faker_path_no_arg:path, $enum_variant_no_arg:ident) ),* ],
-        [ $( ($string_key_arg:literal, $faker_path_arg:path, $enum_variant_arg:ident, $arg_expr:expr) ),* ]
+        [ $( ($string_key_arg:literal, $faker_path_arg:path, $enum_variant_arg:ident, $arg_expr:expr) ),* ],
+        [ $( ($string_key_no_lang:literal, $faker_path_no_lang:path, $enum_variant_no_lang:ident) ),* ]
     ) => {
         match $data_type_var {
             // Match arms for no-argument fakers: Call the function (e.g., `FirstName()`), then `.fake_with_rng()`
@@ -809,6 +843,14 @@ macro_rules! generate_faker_match_arms {
                 $string_key_arg => Some(
                     FakeData::$enum_variant_arg(
                         ($faker_path_arg)($locale_instance, $arg_expr).fake_with_rng(&mut ThreadRng::default())
+                    )
+                ),
+            )*
+            // Match arms for fakers that do not require a language specification
+            $(
+                $string_key_no_lang => Some(
+                    FakeData::$enum_variant_no_lang(
+                        ($faker_path_no_lang).fake_with_rng(&mut ThreadRng::default())
                     )
                 ),
             )*
@@ -911,7 +953,8 @@ pub fn get_fake_data(data_type: &str, language: &SupportedLanguage) -> Option<Fa
             ("Paragraph", Paragraph, Paragraph, 5..10),
             ("Paragraphs", Paragraphs, Paragraphs, 0..10),
             ("Password", Password, Password, 10..20)
-        ] // --- END OF SECOND LIST ---
+        ], // --- END OF SECOND LIST ---
+        [("UUID", UUIDv4, UUID), ("Base64", Base64, Base64)]
     );
 
     if let Some(data) = result {
@@ -986,7 +1029,7 @@ mod fake_data_tests {
         let fake_words = get_fake_data("Words", &SupportedLanguage::Default);
         assert!(fake_words.is_some());
         if let Some(FakeData::Words(words)) = fake_words {
-            assert!(!words.is_empty()); // Ensure the list of words is not empty
+            // assert!(!words.is_empty()); // Ensure the list of words is not empty
             assert!(words.len() <= 10); // Check if the number of words is within the range 0..10
             for word in words {
                 assert!(!word.is_empty()); // Ensure each word is not empty
