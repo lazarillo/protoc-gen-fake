@@ -10,6 +10,7 @@ use fake::{
 use prost_reflect::{Kind as ProstFieldKind, Value as ProstFieldValue};
 use rand::{Rng, rngs::ThreadRng};
 use serde::Serialize; // Import Serialize trait for JSON serialization
+use serde_json::Value as JsonValue; // Import JsonValue for JSON handling
 use std::fmt; // Import Display trait for formatting // Import Rng for random number generation
 
 use std::borrow::Cow; // Import Cow for string handling
@@ -525,6 +526,102 @@ impl FakeData {
             _ => None,
         }
     }
+
+    /// Converts the FakeData enum into a flat serde_json::Value.
+    pub fn into_json_value(self) -> JsonValue {
+        match self {
+            FakeData::Words(v) | FakeData::Sentences(v) | FakeData::Paragraphs(v) => {
+                JsonValue::Array(v.into_iter().map(JsonValue::String).collect())
+            }
+            FakeData::Age(u) => JsonValue::Number(u.into()),
+            // For all other variants, extract the inner String
+            FakeData::CityPrefix(s)
+            | FakeData::CitySuffix(s)
+            | FakeData::CityName(s)
+            | FakeData::CountryName(s)
+            | FakeData::CountryCode(s)
+            | FakeData::StreetSuffix(s)
+            | FakeData::StreetName(s)
+            | FakeData::TimeZone(s)
+            | FakeData::StateName(s)
+            | FakeData::StateAbbr(s)
+            | FakeData::SecondaryAddressType(s)
+            | FakeData::SecondaryAddress(s)
+            | FakeData::ZipCode(s)
+            | FakeData::PostCode(s)
+            | FakeData::BuildingNumber(s)
+            | FakeData::Latitude(s)
+            | FakeData::Longitude(s)
+            | FakeData::Geohash(s)
+            | FakeData::Isbn(s)
+            | FakeData::Isbn10(s)
+            | FakeData::Isbn13(s)
+            | FakeData::CreditCardNumber(s)
+            | FakeData::CompanySuffix(s)
+            | FakeData::CompanyName(s)
+            | FakeData::Buzzword(s)
+            | FakeData::BuzzwordMiddle(s)
+            | FakeData::BuzzwordTail(s)
+            | FakeData::CatchPhrase(s)
+            | FakeData::BsVerb(s)
+            | FakeData::BsAdj(s)
+            | FakeData::BsNoun(s)
+            | FakeData::Bs(s)
+            | FakeData::Profession(s)
+            | FakeData::Industry(s)
+            | FakeData::FreeEmailProvider(s)
+            | FakeData::DomainSuffix(s)
+            | FakeData::FreeEmail(s)
+            | FakeData::SafeEmail(s)
+            | FakeData::Username(s)
+            | FakeData::Password(s)
+            | FakeData::IPv4(s)
+            | FakeData::IPv6(s)
+            | FakeData::IP(s)
+            | FakeData::MACAddress(s)
+            | FakeData::UserAgent(s)
+            | FakeData::Seniority(s)
+            | FakeData::Field(s)
+            | FakeData::Position(s)
+            | FakeData::Word(s)
+            | FakeData::Sentence(s)
+            | FakeData::FirstName(s)
+            | FakeData::LastName(s)
+            | FakeData::Title(s)
+            | FakeData::Suffix(s)
+            | FakeData::Name(s)
+            | FakeData::NameWithTitle(s)
+            | FakeData::PhoneNumber(s)
+            | FakeData::CellNumber(s)
+            | FakeData::FilePath(s)
+            | FakeData::FileName(s)
+            | FakeData::FileExtension(s)
+            | FakeData::DirPath(s)
+            | FakeData::MimeType(s)
+            | FakeData::Semver(s)
+            | FakeData::SemverStable(s)
+            | FakeData::SemverUnstable(s)
+            | FakeData::CurrencyCode(s)
+            | FakeData::CurrencyName(s)
+            | FakeData::CurrencySymbol(s)
+            | FakeData::Bic(s)
+            | FakeData::Isin(s)
+            | FakeData::HexColor(s)
+            | FakeData::RgbColor(s)
+            | FakeData::RgbaColor(s)
+            | FakeData::HslColor(s)
+            | FakeData::HslaColor(s)
+            | FakeData::Color(s)
+            | FakeData::Time(s)
+            | FakeData::Date(s)
+            | FakeData::DateTime(s)
+            | FakeData::RfcStatusCode(s)
+            | FakeData::ValidStatusCode(s)
+            | FakeData::Paragraph(s)
+            | FakeData::Other(s) => JsonValue::String(s),
+        }
+    }
+
     // Helper to get numeric data
     pub fn as_u32(&self) -> Option<u32> {
         match self {

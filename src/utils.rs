@@ -6,7 +6,7 @@ use prost_reflect::{DescriptorPool, Kind as ProstFieldKind, Value};
 use prost_types::{FileDescriptorProto, FileDescriptorSet};
 use protobuf::Message as _;
 use protobuf::plugin::CodeGeneratorRequest;
-use serde_json::{Value as JsonValue, to_value as to_json_value};
+use serde_json::Value as JsonValue;
 use std::collections::HashSet;
 use std::io;
 use std::path::PathBuf;
@@ -181,9 +181,7 @@ pub fn get_fake_data_output_value(
                     );
                 }
             }
-            DataOutputType::Json(
-                to_json_value(&possible_value.unwrap_or_default()).unwrap_or_default(),
-            )
+            DataOutputType::Json(possible_value.unwrap_or_default().into_json_value())
         }
         _ => {
             // Note: this match is only needed for better logging information.
@@ -216,6 +214,25 @@ pub fn get_fake_data_output_value(
 #[cfg(test)]
 mod utils_tests {
     use super::*; // Import everything from the outer scope
+
+    use env_logger;
+    use once_cell::sync::Lazy; // Import Lazy for one-time initialization // Import env_logger
+
+    // Initialize the logger once for all tests in this file's `utils_tests` module.
+    // This static variable ensures the initialization happens only once
+    // when this test module is loaded.
+    static INIT_LOGGER_UTILS: Lazy<()> = Lazy::new(|| {
+        // Set `is_test(true)` to ensure log messages are captured by Cargo's test harness
+        // and `try_init().ok()` to prevent panicking if already initialized (e.g., by another test crate).
+        env_logger::builder().is_test(true).try_init().ok();
+    });
+
+    // This `init` test function will be run by Cargo first within this module.
+    // It forces the initialization of the logger.
+    #[test]
+    fn init_logger() {
+        Lazy::force(&INIT_LOGGER_UTILS);
+    }
 
     /// Helper function to create a mock CodeGeneratorRequest for testing.
     fn create_mock_request(
