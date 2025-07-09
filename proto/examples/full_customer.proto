@@ -1,0 +1,28 @@
+syntax = "proto3";
+package examples;
+
+import "gen_fake/fake_field.proto";
+
+message Address {
+  message Street {
+    uint32 number = 1 [(gen_fake.fake_data).data_type = "WholeNumber"];
+    string name = 2 [(gen_fake.fake_data).data_type =  "StreetName"];
+  }
+
+  string street
+  
+  string id = 1 [(gen_fake.fake_data).data_type = "SafeEmail"];
+  string name = 2 [(gen_fake.fake_data) = {
+    data_type: "FirstName"
+    language: "FR_FR"
+  }];
+  string family_name = 3 [(gen_fake.fake_data) = {
+    data_type: "LastName"
+    language: "PT_BR"
+  }];
+  repeated string phone_numbers = 4 [(gen_fake.fake_data) = {
+    data_type: "PhoneNumber"
+    min_count: 1
+    max_count: 3
+  }];
+}

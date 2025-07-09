@@ -10,6 +10,7 @@ use serde_json::Value as JsonValue;
 use std::collections::HashSet;
 use std::io;
 use std::path::PathBuf;
+use std::str::FromStr;
 
 use crate::fake_data::get_fake_data;
 
@@ -35,10 +36,109 @@ impl fmt::Display for DesiredOutputFormat {
     }
 }
 
+#[derive(PartialEq, Clone)]
+#[allow(non_camel_case_types)]
+pub enum SupportedLanguage {
+    AR_SA,   // Arabic (Saudi Arabia)
+    DE_DE,   // German (Germany)
+    Default, // Allow for default, which means it can be overridden by the field
+    EN,      // English
+    FR_FR,   // French (France)
+    IT_IT,   // Italian (Italy)
+    JA_JP,   // Japanese (Japan)
+    PT_BR,   // Portuguese (Brazil)
+    PT_PT,   // Portuguese (Portugal)
+    ZH_CN,   // Simplified Chinese (China)
+    ZH_TW,   // Traditional Chinese (Taiwan)
+}
+
+impl Default for SupportedLanguage {
+    fn default() -> Self {
+        SupportedLanguage::Default
+    }
+}
+
+impl fmt::Display for SupportedLanguage {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            SupportedLanguage::AR_SA => write!(f, "Arabic (Saudi Arabia)"),
+            SupportedLanguage::DE_DE => write!(f, "German (Germany)"),
+            SupportedLanguage::Default => write!(f, "Default (no overriding language)"),
+            SupportedLanguage::EN => write!(f, "English"),
+            SupportedLanguage::FR_FR => write!(f, "French (France)"),
+            SupportedLanguage::IT_IT => write!(f, "Italian (Italy)"),
+            SupportedLanguage::JA_JP => write!(f, "Japanese (Japan)"),
+            SupportedLanguage::PT_BR => write!(f, "Portuguese (Brazil)"),
+            SupportedLanguage::PT_PT => write!(f, "Portuguese (Portugal)"),
+            SupportedLanguage::ZH_CN => write!(f, "Simplified Chinese (China)"),
+            SupportedLanguage::ZH_TW => write!(f, "Traditional Chinese (Taiwan)"),
+        }
+    }
+}
+
+// Define a custom error type for when conversion fails
+#[derive(Debug, PartialEq)]
+pub enum ParseLanguageError {
+    InvalidLanguage,
+}
+
+impl fmt::Display for ParseLanguageError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            ParseLanguageError::InvalidLanguage => {
+                write!(f, "Language not yet supported or invalid")
+            }
+        }
+    }
+}
+
+// Implement the standard FromStr trait for SupportedLanguage
+impl FromStr for SupportedLanguage {
+    type Err = ParseLanguageError; // Specify custom error
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_ascii_lowercase().as_str() {
+            "ar_sa" | "ar" | "arabic" => Ok(SupportedLanguage::AR_SA),
+            "de_de" | "de" | "german" => Ok(SupportedLanguage::DE_DE),
+            "en" | "english" => Ok(SupportedLanguage::EN),
+            "fr_fr" | "fr" | "french" => Ok(SupportedLanguage::FR_FR),
+            "it_it" | "it" | "italian" => Ok(SupportedLanguage::IT_IT),
+            "ja_jp" | "ja" | "japanese" => Ok(SupportedLanguage::JA_JP),
+            "pt_br" | "pt" | "brazilian_portuguese" => Ok(SupportedLanguage::PT_BR),
+            "pt_pt" | "portuguese" => Ok(SupportedLanguage::PT_PT),
+            "zh_cn" | "zh" | "simplified_chinese" | "chinese" => Ok(SupportedLanguage::ZH_CN),
+            "zh_tw" | "traditional_chinese" | "taiwanese" => Ok(SupportedLanguage::ZH_TW),
+            _ => Err(ParseLanguageError::InvalidLanguage),
+        }
+    }
+}
+// To use `Debug` for `println!("{:?}", ...)`
+impl std::fmt::Debug for SupportedLanguage {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SupportedLanguage::AR_SA => write!(f, "SupportedLanguage::AR_SA"),
+            SupportedLanguage::DE_DE => write!(f, "SupportedLanguage::DE_DE"),
+            SupportedLanguage::Default => write!(f, "SupportedLanguage::Default"),
+            SupportedLanguage::EN => write!(f, "SupportedLanguage::EN"),
+            SupportedLanguage::FR_FR => write!(f, "SupportedLanguage::FR_FR"),
+            SupportedLanguage::IT_IT => write!(f, "SupportedLanguage::IT_IT"),
+            SupportedLanguage::JA_JP => write!(f, "SupportedLanguage::JA_JP"),
+            SupportedLanguage::PT_BR => write!(f, "SupportedLanguage::PT_BR"),
+            SupportedLanguage::PT_PT => write!(f, "SupportedLanguage::PT_PT"),
+            SupportedLanguage::ZH_CN => write!(f, "SupportedLanguage::ZH_CN"),
+            SupportedLanguage::ZH_TW => write!(f, "SupportedLanguage::ZH_TW"),
+        }
+    }
+}
+
 /// Parse the request from protoc to extract and return output format and output path.
-pub fn parse_request_parameters(request: &CodeGeneratorRequest) -> (DesiredOutputFormat, PathBuf) {
+pub fn parse_request_parameters(
+    request: &CodeGeneratorRequest,
+) -> (DesiredOutputFormat, PathBuf, SupportedLanguage, bool) {
     let mut output_format = DesiredOutputFormat::Protobuf; // Default output format
     let mut output_path = PathBuf::from("."); // Default output path
+    // No overriding default language, let the fields decide language
+    let mut language = SupportedLanguage::Default;
+    let mut force_global_language = false; // Default to not forcing global language override
     if let Some(params) = request.parameter.as_ref() {
         for param in params.split(',') {
             let key_val = param.split('=').collect::<Vec<&str>>();
@@ -46,11 +146,11 @@ pub fn parse_request_parameters(request: &CodeGeneratorRequest) -> (DesiredOutpu
                 match key_val[0].to_lowercase().as_str() {
                     // Check if the parameter is 'format'
                     key if key.starts_with("form") => match key_val[1].to_lowercase().as_str() {
-                        val if val.starts_with("proto") => {
+                        val if val.starts_with("proto") | val.starts_with("bin") => {
                             output_format = DesiredOutputFormat::Protobuf;
                             log::info!(
                                 "Parameter '{}' found, output format set to: {}",
-                                params,
+                                param,
                                 output_format
                             );
                         }
@@ -58,7 +158,7 @@ pub fn parse_request_parameters(request: &CodeGeneratorRequest) -> (DesiredOutpu
                             output_format = DesiredOutputFormat::Json;
                             log::info!(
                                 "Parameter '{}' found, output format set to: {}",
-                                params,
+                                param,
                                 output_format
                             );
                         }
@@ -70,13 +170,36 @@ pub fn parse_request_parameters(request: &CodeGeneratorRequest) -> (DesiredOutpu
                             );
                         }
                     },
+                    key if key.starts_with("forc") => {
+                        force_global_language = true;
+                        log::info!(
+                            "Parameter '{}' found, forcing global language override set to: {}",
+                            param,
+                            force_global_language
+                        );
+                    }
                     key if key.starts_with("out") => {
                         output_path = PathBuf::from(key_val[1]);
                         log::info!(
                             "Parameter '{}' found, output path set to: {}",
-                            params,
+                            param,
                             output_path.to_str().unwrap_or("unknown")
                         );
+                    }
+                    key if key.starts_with("lang") => {
+                        let found_language = SupportedLanguage::from_str(key_val[1]);
+                        language = match found_language {
+                            Ok(lang) => lang,
+                            Err(err) => {
+                                log::warn!(
+                                    "Provided language '{}': {}, defaulting to no overriding language",
+                                    key_val[1],
+                                    err
+                                );
+                                SupportedLanguage::Default
+                            }
+                        };
+                        log::info!("Parameter '{}' found, language set to: {}", param, language);
                     }
                     _ => {
                         log::warn!(
@@ -94,13 +217,14 @@ pub fn parse_request_parameters(request: &CodeGeneratorRequest) -> (DesiredOutpu
         }
     } else {
         log::info!(
-            "No parameters provided, using default output format and path: '{}' and '{}'",
+            "No parameters provided, using default output format, language, and path: '{}', '{}' and '{}'",
             output_format,
+            language,
             output_path.to_str().unwrap_or("unknown")
         );
     }
     // (output_format.to_string(), output_path)
-    (output_format, output_path)
+    (output_format, output_path, language, force_global_language)
 }
 
 /// Simple extractor for the file names to generate from the request.
@@ -148,9 +272,35 @@ pub fn get_runtime_descriptor_pool(request: &CodeGeneratorRequest) -> Descriptor
     runtime_descriptor_pool
 }
 
+pub fn choose_language(
+    field_language: &SupportedLanguage,
+    global_language: &SupportedLanguage,
+    force_global_language: bool,
+) -> SupportedLanguage {
+    if force_global_language {
+        log::debug!(
+            "Forcing language override to '{}'",
+            global_language.to_string()
+        );
+        global_language.clone()
+    } else if field_language != &SupportedLanguage::Default {
+        log::debug!(
+            "Using field-level language '{}', ignoring global language",
+            field_language.to_string()
+        );
+        field_language.clone()
+    } else {
+        log::debug!(
+            "Using language '{}', no field-level language specified",
+            global_language.to_string()
+        );
+        global_language.clone()
+    }
+}
+
 pub fn get_fake_data_output_value(
     data_type: &str,
-    language: &str,
+    language: &SupportedLanguage,
     output_format: &DesiredOutputFormat,
     field_kind: &ProstFieldKind,
 ) -> DataOutputType {
@@ -252,45 +402,55 @@ mod utils_tests {
     #[test]
     fn test_parse_request_parameters_default() {
         let request = create_mock_request(None, &[]);
-        let (format, path) = parse_request_parameters(&request);
+        let (format, path, language, force_language) = parse_request_parameters(&request);
         assert_eq!(format, DesiredOutputFormat::Protobuf);
         assert_eq!(path, PathBuf::from("."));
+        assert_eq!(language, SupportedLanguage::Default);
+        assert!(!force_language);
     }
 
     /// Test `parse_request_parameters` with JSON format.
     #[test]
     fn test_parse_request_parameters_json_format() {
         let request = create_mock_request(Some("format=json"), &[]);
-        let (format, path) = parse_request_parameters(&request);
+        let (format, path, language, force_language) = parse_request_parameters(&request);
         assert_eq!(format, DesiredOutputFormat::Json);
         assert_eq!(path, PathBuf::from("."));
+        assert_eq!(language, SupportedLanguage::Default);
+        assert!(!force_language);
     }
 
     /// Test `parse_request_parameters` with Protobuf format.
     #[test]
     fn test_parse_request_parameters_protobuf_format() {
         let request = create_mock_request(Some("format=protobuf"), &[]);
-        let (format, path) = parse_request_parameters(&request);
+        let (format, path, language, force_language) = parse_request_parameters(&request);
         assert_eq!(format, DesiredOutputFormat::Protobuf);
         assert_eq!(path, PathBuf::from("."));
+        assert_eq!(language, SupportedLanguage::Default);
+        assert!(!force_language);
     }
 
     /// Test `parse_request_parameters` with a custom output path.
     #[test]
     fn test_parse_request_parameters_output_path() {
         let request = create_mock_request(Some("output_path=./my_output"), &[]);
-        let (format, path) = parse_request_parameters(&request);
+        let (format, path, language, force_language) = parse_request_parameters(&request);
         assert_eq!(format, DesiredOutputFormat::Protobuf); // Default format
         assert_eq!(path, PathBuf::from("./my_output"));
+        assert_eq!(language, SupportedLanguage::Default);
+        assert!(!force_language);
     }
 
     /// Test `parse_request_parameters` with both format and output path.
     #[test]
     fn test_parse_request_parameters_all_options() {
         let request = create_mock_request(Some("format=json,output_path=/tmp/out"), &[]);
-        let (format, path) = parse_request_parameters(&request);
+        let (format, path, language, force_language) = parse_request_parameters(&request);
         assert_eq!(format, DesiredOutputFormat::Json);
         assert_eq!(path, PathBuf::from("/tmp/out"));
+        assert_eq!(language, SupportedLanguage::Default);
+        assert!(!force_language);
     }
 
     /// Test `parse_request_parameters` with unrecognized parameters.
@@ -298,9 +458,11 @@ mod utils_tests {
     fn test_parse_request_parameters_unrecognized() {
         // Unrecognized parameters should be ignored, and defaults should apply
         let request = create_mock_request(Some("unknown=value,format=json"), &[]);
-        let (format, path) = parse_request_parameters(&request);
+        let (format, path, language, force_language) = parse_request_parameters(&request);
         assert_eq!(format, DesiredOutputFormat::Json);
         assert_eq!(path, PathBuf::from("."));
+        assert_eq!(language, SupportedLanguage::Default);
+        assert!(!force_language);
     }
 
     /// Test `get_key_files`.
@@ -318,7 +480,7 @@ mod utils_tests {
     fn test_get_fake_data_output_value_json() {
         let output = get_fake_data_output_value(
             "FirstName",
-            "en",
+            &SupportedLanguage::Default,
             &DesiredOutputFormat::Json,
             &ProstFieldKind::String,
         );
@@ -336,7 +498,7 @@ mod utils_tests {
     fn test_get_fake_data_output_value_protobuf() {
         let output = get_fake_data_output_value(
             "Age",
-            "en",
+            &SupportedLanguage::Default,
             &DesiredOutputFormat::Protobuf,
             &ProstFieldKind::Int32,
         );
@@ -355,7 +517,7 @@ mod utils_tests {
     fn test_get_fake_data_output_value_json_list() {
         let output = get_fake_data_output_value(
             "Words",
-            "en",
+            &SupportedLanguage::Default,
             &DesiredOutputFormat::Json,
             &ProstFieldKind::String,
         );
@@ -380,7 +542,7 @@ mod utils_tests {
     fn test_get_fake_data_output_value_protobuf_list() {
         let output = get_fake_data_output_value(
             "Words",
-            "en",
+            &SupportedLanguage::Default,
             &DesiredOutputFormat::Protobuf,
             &ProstFieldKind::String,
         );

@@ -34,6 +34,24 @@
 //!
 //! ## Options
 //!
+//! The following plugin-level options are supported:
+//! - `output_path`: The path where the generated protobuf binary file(s) will be written.
+//!                  This is passed as `--fake_opt output_path=<path>`.
+//!                  Default: Current path (with respect to where `protoc` is run).
+//! - `format`: The format of the output file(s). Can be either `json` or `protobuf`.
+//!             This is passed as `--fake_opt format=<format>`.
+//!             Default: `protobuf`.
+//! - `language`: The language to use globally for generating all fake data. The language can
+//!               also be specified on a per-field basis using the `fake_data` field option.
+//!               The field-set language will override the global language, unless the
+//!               force_language field option is set to `true`.
+//!               This is passed as `--fake_opt language=<lang>`.
+//!               Default: `en` (English).
+//! - `force_language`: If set , the global language will be used for all fake data
+//!                     generation, regardless of the field-set language.
+//!                     This is passed as `--fake_opt force_language=<anything>`.
+//!                     Default: `false`.
+//!
 //! It unfortunately needs to use both `prost` and `protobuf` crates to manage this, because`prost` does
 //! not expose custom options, and `protobuf` does not support dynamic messages.
 
@@ -52,7 +70,11 @@ use std::fs;
 pub mod utils; // Import utility functions for parsing request parameters
 use std::io::{self, Read, Write};
 use std::path::Path;
-use utils::{DataOutputType, DesiredOutputFormat, get_key_files, parse_request_parameters}; // Import Path for file handling // Import locales for fake data generation // Import Lazy for static initialization
+use std::str::FromStr;
+use utils::{
+    DataOutputType, DesiredOutputFormat, SupportedLanguage, choose_language, get_key_files,
+    parse_request_parameters,
+}; // Import Path for file handling // Import locales for fake data generation // Import Lazy for static initialization
 
 #[path = "./gen_protobuf/fake_field.rs"]
 pub mod generated_proto; // Import the generated protobuf code for custom options
@@ -84,7 +106,8 @@ fn main() -> io::Result<()> {
     log::debug!("Full CodeGeneratorRequest received: {:#?}", request);
 
     // Parse the request parameters to get output format and output path, or populate defaults
-    let (output_format, output_path) = parse_request_parameters(&request);
+    let (output_format, output_path, global_language, force_global_language) =
+        parse_request_parameters(&request);
 
     // Get the set of files to generate (explicitly requested by protoc)
     let key_files = get_key_files(&request);
@@ -116,14 +139,17 @@ fn main() -> io::Result<()> {
                 .unwrap_or_default();
             let output_name = match output_format {
                 DesiredOutputFormat::Json => format!("{}.json", file_stem),
-                _ => format!("{}.b64", file_stem),
+                DesiredOutputFormat::Protobuf => format!("{}.b64", file_stem),
             };
-            log::warn!(" output_name: {}", output_name);
-            let binary_path = Path::new(&output_path)
-                .join(file_stem)
-                .with_extension("bin");
-            let binary_name = binary_path.to_str().unwrap_or("output.bin");
-            log::warn!(" binary_path: {}", binary_name);
+            log::warn!(" output file: {}", output_name);
+            let mut binary_name = "output.bin".to_string();
+            if output_format == DesiredOutputFormat::Protobuf {
+                let binary_path = Path::new(&output_path)
+                    .join(file_stem)
+                    .with_extension("bin");
+                binary_name = binary_path.to_string_lossy().to_string();
+                log::warn!(" binary path: {}", binary_name);
+            }
             let mut all_messages: Vec<DynamicMessage> = Vec::new();
             let mut all_json_messages: Vec<JsonMap<String, JsonValue>> = Vec::new();
             let runtime_file_descriptor = runtime_descriptor_pool.get_file_by_name(filename)
@@ -178,7 +204,17 @@ fn main() -> io::Result<()> {
                         // Use rust-protobuf's get_extension for your custom option
                         if let Some(fake_data_option) = fake_data.get(pb_options) {
                             let data_type = fake_data_option.data_type.as_str();
-                            let language = fake_data_option.language.as_str();
+                            let field_level_language = match SupportedLanguage::from_str(
+                                fake_data_option.language.as_str(),
+                            ) {
+                                Ok(lang) => lang,
+                                Err(_) => SupportedLanguage::Default,
+                            };
+                            let language = &choose_language(
+                                &field_level_language,
+                                &global_language,
+                                force_global_language,
+                            );
                             let min_count = max(fake_data_option.min_count, 0);
                             let max_count = max(fake_data_option.max_count, max(min_count, 1));
                             if is_list_field {
@@ -295,32 +331,39 @@ fn main() -> io::Result<()> {
             let mut generated_file_content: Vec<u8> = Vec::new();
             let mut generated_file = protobuf::plugin::code_generator_response::File::new();
             generated_file.set_name(output_name);
-            if output_format == DesiredOutputFormat::Json {
-                generated_file_content = to_vec_pretty(&all_json_messages).map_err(|e| {
-                    io::Error::new(
-                        io::ErrorKind::Other,
-                        format!("Failed to serialize to JSON: {}", e),
-                    )
-                })?;
-                let stringified_content =
-                    String::from_utf8(generated_file_content).map_err(|e| {
+            match output_format {
+                DesiredOutputFormat::Json => {
+                    generated_file_content = to_vec_pretty(&all_json_messages).map_err(|e| {
                         io::Error::new(
-                            io::ErrorKind::InvalidData,
-                            format!("Failed to convert UTF-8 bytes to String: {}", e),
+                            io::ErrorKind::Other,
+                            format!("Failed to serialize to JSON: {}", e),
                         )
                     })?;
-                generated_file.set_content(stringified_content);
-            } else {
-                log::warn!("Here are the key files: {:?}", key_files);
-                for next_message in all_messages {
-                    let msg_bytes = next_message.encode_to_vec();
-                    generated_file_content.extend_from_slice(&msg_bytes);
+                    let stringified_content =
+                        String::from_utf8(generated_file_content).map_err(|e| {
+                            io::Error::new(
+                                io::ErrorKind::InvalidData,
+                                format!("Failed to convert UTF-8 bytes to String: {}", e),
+                            )
+                        })?;
+                    generated_file.set_content(stringified_content);
+                    log::warn!(
+                        "Wrote JSON to the following path: {}",
+                        generated_file.name.clone().unwrap_or("unknown".to_string())
+                    );
                 }
-                fs::write(&binary_name, &generated_file_content)
-                    .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
-                log::warn!("Wrote binary to the following path: {:?}", binary_name);
-                let file_content_string = general_purpose::STANDARD.encode(&generated_file_content);
-                generated_file.set_content(file_content_string);
+                DesiredOutputFormat::Protobuf => {
+                    for next_message in all_messages {
+                        let msg_bytes = next_message.encode_to_vec();
+                        generated_file_content.extend_from_slice(&msg_bytes);
+                    }
+                    fs::write(&binary_name, &generated_file_content)
+                        .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+                    log::warn!("Wrote binary to the following path: {}", binary_name);
+                    let file_content_string =
+                        general_purpose::STANDARD.encode(&generated_file_content);
+                    generated_file.set_content(file_content_string);
+                }
             }
             response.file.push(generated_file);
         }

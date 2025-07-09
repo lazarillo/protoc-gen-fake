@@ -1,3 +1,4 @@
+use crate::utils::SupportedLanguage;
 use fake::{
     Fake, // Import specific locale instances directly from `fake::locales`
     faker::{
@@ -108,7 +109,10 @@ pub enum FakeData {
 
     // Custom types, still using Faker to generate them
     Age(u32),
-    Other(String), // For the default case
+    Integer(i32),     // For random integers
+    WholeNumber(u32), // For only whole numbers
+    Decimal(f64),     // For random floats
+    Other(String),    // For the default case
 }
 
 impl Default for FakeData {
@@ -205,6 +209,9 @@ impl fmt::Display for FakeData {
             | FakeData::Paragraph(s)
             | FakeData::Other(s) => write!(f, "{}", s),
             FakeData::Age(i) => write!(f, "{}", i),
+            FakeData::Integer(i) => write!(f, "{}", i),
+            FakeData::WholeNumber(u) => write!(f, "{}", u),
+            FakeData::Decimal(flt) => write!(f, "{}", flt),
             FakeData::Words(v) | FakeData::Sentences(v) | FakeData::Paragraphs(v) => {
                 write!(f, "{:?}", v)
             }
@@ -301,6 +308,9 @@ impl FakeData {
             | FakeData::Paragraph(s)
             | FakeData::Other(s) => s,
             FakeData::Age(val) => val.to_string(),
+            FakeData::Integer(val) => val.to_string(),
+            FakeData::WholeNumber(val) => val.to_string(),
+            FakeData::Decimal(val) => val.to_string(),
             FakeData::Words(v) | FakeData::Sentences(v) | FakeData::Paragraphs(v) => v.join(" "), // Join into single string
         }
     }
@@ -422,6 +432,47 @@ impl FakeData {
                     ProstFieldValue::U32(val)
                 }
             },
+            FakeData::Integer(val) => match expected_kind {
+                &ProstFieldKind::Int32 => ProstFieldValue::I32(val),
+                &ProstFieldKind::Int64 => ProstFieldValue::I64(val as i64),
+                &ProstFieldKind::Uint32 => ProstFieldValue::U32(val as u32),
+                &ProstFieldKind::Uint64 => ProstFieldValue::U64(val as u64),
+                &ProstFieldKind::Sfixed32 => ProstFieldValue::I32(val),
+                &ProstFieldKind::Sfixed64 => ProstFieldValue::I64(val as i64),
+                &ProstFieldKind::Fixed32 => ProstFieldValue::U32(val as u32),
+                &ProstFieldKind::Fixed64 => ProstFieldValue::U64(val as u64),
+                _ => {
+                    log::warn!(
+                        "Mismatched type: FakeData is i32, but Prost field is {:?}. Defaulting to i32.",
+                        expected_kind
+                    );
+                    ProstFieldValue::I32(val)
+                }
+            },
+            FakeData::WholeNumber(val) => match expected_kind {
+                &ProstFieldKind::Uint32 => ProstFieldValue::U32(val),
+                &ProstFieldKind::Uint64 => ProstFieldValue::U64(val as u64),
+                &ProstFieldKind::Fixed32 => ProstFieldValue::U32(val),
+                &ProstFieldKind::Fixed64 => ProstFieldValue::U64(val as u64),
+                _ => {
+                    log::warn!(
+                        "Mismatched type: FakeData is u32, but Prost field is {:?}. Defaulting to u32.",
+                        expected_kind
+                    );
+                    ProstFieldValue::U32(val)
+                }
+            },
+            FakeData::Decimal(val) => match expected_kind {
+                &ProstFieldKind::Float => ProstFieldValue::F32(val as f32),
+                &ProstFieldKind::Double => ProstFieldValue::F64(val),
+                _ => {
+                    log::warn!(
+                        "Mismatched type: FakeData is f64, but Prost field is {:?}. Defaulting to f64.",
+                        expected_kind
+                    );
+                    ProstFieldValue::F64(val)
+                }
+            },
             FakeData::Words(v) | FakeData::Sentences(v) | FakeData::Paragraphs(v) => {
                 // For repeated string fields, we provide a Vec<Value> where each is a String
                 if expected_kind == &ProstFieldKind::String {
@@ -534,6 +585,12 @@ impl FakeData {
                 JsonValue::Array(v.into_iter().map(JsonValue::String).collect())
             }
             FakeData::Age(u) => JsonValue::Number(u.into()),
+            FakeData::Integer(i) => JsonValue::Number(i.into()),
+            FakeData::WholeNumber(i) => JsonValue::Number(i.into()),
+            FakeData::Decimal(flt) => match serde_json::Number::from_f64(flt) {
+                Some(num) => JsonValue::Number(num),
+                None => JsonValue::Null,
+            },
             // For all other variants, extract the inner String
             FakeData::CityPrefix(s)
             | FakeData::CitySuffix(s)
@@ -629,6 +686,18 @@ impl FakeData {
             _ => None,
         }
     }
+    pub fn as_i32(&self) -> Option<i32> {
+        match self {
+            FakeData::Integer(i) => Some(*i),
+            _ => None,
+        }
+    }
+    pub fn as_f64(&self) -> Option<f64> {
+        match self {
+            FakeData::Decimal(flt) => Some(*flt),
+            _ => None,
+        }
+    }
     // Helper to get <Vec<String>> data
     pub fn as_vec_string(&self) -> Option<&Vec<String>> {
         match self {
@@ -650,72 +719,71 @@ macro_rules! generate_faker_match_arms {
         [ $( ($string_key_arg:literal, $faker_path_arg:path, $enum_variant_arg:ident, $arg_expr:expr) ),* ]
     ) => {
         // Outer match on language
-        match $language_var.to_lowercase().as_str() {
-            "ar_sa" | "ar" | "arabic" => {
+        match $language_var {
+            SupportedLanguage::AR_SA => {
                 // Call the internal rule, passing the concrete locale instance
                 generate_faker_match_arms!(@internal_faker_match $data_type_var, AR_SA,
                     [ $( ($string_key_no_arg, $faker_path_no_arg, $enum_variant_no_arg) ),* ],
                     [ $( ($string_key_arg, $faker_path_arg, $enum_variant_arg, $arg_expr) ),* ]
                 )
             },
-            "de_de" | "de" | "german" => {
+            SupportedLanguage::DE_DE => {
                 // Call the internal rule, passing the concrete locale instance
                 generate_faker_match_arms!(@internal_faker_match $data_type_var, DE_DE,
                     [ $( ($string_key_no_arg, $faker_path_no_arg, $enum_variant_no_arg) ),* ],
                     [ $( ($string_key_arg, $faker_path_arg, $enum_variant_arg, $arg_expr) ),* ]
                 )
             },
-            "en" | "english" => {
+            // If no language is found (SupportedLanguage::Default), then English is used.
+            SupportedLanguage::EN | SupportedLanguage::Default => {
                 // Call the internal rule, passing the concrete locale instance
                 generate_faker_match_arms!(@internal_faker_match $data_type_var, EN,
                     [ $( ($string_key_no_arg, $faker_path_no_arg, $enum_variant_no_arg) ),* ],
                     [ $( ($string_key_arg, $faker_path_arg, $enum_variant_arg, $arg_expr) ),* ]
                 )
             },
-            "fr_fr" | "fr" | "french" => {
+            SupportedLanguage::FR_FR => {
                 generate_faker_match_arms!(@internal_faker_match $data_type_var, FR_FR,
                     [ $( ($string_key_no_arg, $faker_path_no_arg, $enum_variant_no_arg) ),* ],
                     [ $( ($string_key_arg, $faker_path_arg, $enum_variant_arg, $arg_expr) ),* ]
                 )
             },
-            "it_it" | "it" | "italian" => {
+            SupportedLanguage::IT_IT => {
                 generate_faker_match_arms!(@internal_faker_match $data_type_var, IT_IT,
                     [ $( ($string_key_no_arg, $faker_path_no_arg, $enum_variant_no_arg) ),* ],
                     [ $( ($string_key_arg, $faker_path_arg, $enum_variant_arg, $arg_expr) ),* ]
                 )
             },
-            "ja_jp" | "ja" | "japanese" => {
+            SupportedLanguage::JA_JP => {
                 generate_faker_match_arms!(@internal_faker_match $data_type_var, JA_JP,
                     [ $( ($string_key_no_arg, $faker_path_no_arg, $enum_variant_no_arg) ),* ],
                     [ $( ($string_key_arg, $faker_path_arg, $enum_variant_arg, $arg_expr) ),* ]
                 )
             },
-            "pt_br" | "pt" | "brazilian portuguese" => {
+            SupportedLanguage::PT_BR => {
                 generate_faker_match_arms!(@internal_faker_match $data_type_var, PT_BR,
                     [ $( ($string_key_no_arg, $faker_path_no_arg, $enum_variant_no_arg) ),* ],
                     [ $( ($string_key_arg, $faker_path_arg, $enum_variant_arg, $arg_expr) ),* ]
                 )
             },
-            "pt_pt"  | "portuguese" => {
+            SupportedLanguage::PT_PT => {
                 generate_faker_match_arms!(@internal_faker_match $data_type_var, PT_PT,
                     [ $( ($string_key_no_arg, $faker_path_no_arg, $enum_variant_no_arg) ),* ],
                     [ $( ($string_key_arg, $faker_path_arg, $enum_variant_arg, $arg_expr) ),* ]
                 )
             },
-            "zh_cn" | "zh" | "chinese" | "simplified chinese" => {
+            SupportedLanguage::ZH_CN => {
                 generate_faker_match_arms!(@internal_faker_match $data_type_var, ZH_CN,
                     [ $( ($string_key_no_arg, $faker_path_no_arg, $enum_variant_no_arg) ),* ],
                     [ $( ($string_key_arg, $faker_path_arg, $enum_variant_arg, $arg_expr) ),* ]
                 )
             },
-            "zh_tw" | "taiwanese" | "traditional chinese" => {
+            SupportedLanguage::ZH_TW => {
                 generate_faker_match_arms!(@internal_faker_match $data_type_var, ZH_TW,
                     [ $( ($string_key_no_arg, $faker_path_no_arg, $enum_variant_no_arg) ),* ],
                     [ $( ($string_key_arg, $faker_path_arg, $enum_variant_arg, $arg_expr) ),* ]
                 )
             },
-            // Add more language arms here for each locale you support
-            _ => None, // Fallback if the language_input itself is not recognized
         }
     };
     // Internal match on the data type
@@ -749,16 +817,16 @@ macro_rules! generate_faker_match_arms {
     };
 }
 
-pub fn get_fake_data(data_type: &str, language: &str) -> Option<FakeData> {
-    // If no language is provided, default to English
-    let derived_language = if language.is_empty() {
-        "english"
-    } else {
-        language
-    };
+pub fn get_fake_data(data_type: &str, language: &SupportedLanguage) -> Option<FakeData> {
+    // // If no language is provided, default to English
+    // let derived_language = if language.is_empty() {
+    //     "english"
+    // } else {
+    //     language
+    // };
     let result = generate_faker_match_arms!(
         data_type,
-        derived_language,
+        language,
         // --- START OF FIRST LIST (Unit Struct Fakers - call method directly) ---
         [
             ("FirstName", FirstName, FirstName),
@@ -850,11 +918,36 @@ pub fn get_fake_data(data_type: &str, language: &str) -> Option<FakeData> {
         return Some(data);
     }
 
-    // Special handling for "Age" (not a fake crate faker)
-    if data_type == "Age" {
-        return Some(FakeData::Age(rand::rng().random_range(8..90)));
+    // Special handling for those outside of the fake package
+    // In the future, `fake_data.rs` should be restructured to allow for the parameters
+    // to be passed in, but it is non-trivial to add at this point.
+    match data_type {
+        "Age" => {
+            // Generate a random age between 8 and 90
+            Some(FakeData::Age(rand::rng().random_range(8..90)))
+        }
+        "Integer" => {
+            // Generate a random integer between -10.000 and 10.000
+            Some(FakeData::Integer(rand::rng().random_range(-10000..10000)))
+        }
+        "WholeNumber" => {
+            // Generate a random positive integer between 0 and 10.000
+            Some(FakeData::WholeNumber(rand::rng().random_range(0..10000)))
+        }
+        "Decimal" => {
+            // Generate a random float between -10.000 and 10.000
+            // Note: This is actually a float, not a fixed-point decimal.
+            // The term "Decimal" here is used simply to reach a broader, non-technical
+            // audience, since these names will be used in the .proto file.
+            Some(FakeData::Decimal(
+                rand::rng().random_range(-10000.0..10000.0),
+            ))
+        }
+        _ => {
+            // If no match was found, return None
+            None
+        }
     }
-    None
 }
 
 #[cfg(test)] // This attribute tells Cargo to compile and run the test only when `cargo test` is run.
@@ -864,7 +957,7 @@ mod fake_data_tests {
     /// Test `get_fake_data` with a known string data type and default language.
     #[test]
     fn test_get_fake_data_first_name_en() {
-        let fake_name = get_fake_data("FirstName", "en");
+        let fake_name = get_fake_data("FirstName", &SupportedLanguage::Default);
         assert!(fake_name.is_some()); // Assert that a value was returned
         if let Some(FakeData::FirstName(name)) = fake_name {
             assert!(!name.is_empty()); // Assert the generated name is not empty
@@ -878,7 +971,7 @@ mod fake_data_tests {
     /// Test `get_fake_data` with a numeric data type ("Age").
     #[test]
     fn test_get_fake_data_age() {
-        let fake_age = get_fake_data("Age", "en");
+        let fake_age = get_fake_data("Age", &SupportedLanguage::Default);
         assert!(fake_age.is_some());
         if let Some(FakeData::Age(age)) = fake_age {
             assert!(age >= 8 && age <= 90); // Check if age is within the expected range
@@ -890,7 +983,7 @@ mod fake_data_tests {
     /// Test `get_fake_data` with a list-based data type ("Words").
     #[test]
     fn test_get_fake_data_words() {
-        let fake_words = get_fake_data("Words", "en");
+        let fake_words = get_fake_data("Words", &SupportedLanguage::Default);
         assert!(fake_words.is_some());
         if let Some(FakeData::Words(words)) = fake_words {
             assert!(!words.is_empty()); // Ensure the list of words is not empty
@@ -906,14 +999,14 @@ mod fake_data_tests {
     /// Test `get_fake_data` with an unsupported data type.
     #[test]
     fn test_get_fake_data_unsupported_type() {
-        let fake_data = get_fake_data("UnsupportedType", "en");
+        let fake_data = get_fake_data("UnsupportedType", &SupportedLanguage::Default);
         assert!(fake_data.is_none()); // Expect None for unsupported types
     }
 
     /// Test `get_fake_data` with a different language (German).
     #[test]
     fn test_get_fake_data_city_de() {
-        let fake_city = get_fake_data("CityName", "de");
+        let fake_city = get_fake_data("CityName", &SupportedLanguage::DE_DE);
         assert!(fake_city.is_some());
         if let Some(FakeData::CityName(city)) = fake_city {
             assert!(!city.is_empty());
