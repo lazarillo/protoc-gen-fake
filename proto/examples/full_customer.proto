@@ -3,30 +3,66 @@ package examples;
 
 import "gen_fake/fake_field.proto";
 
+message Customer {
+  string id = 1 [(gen_fake.fake_data) = {
+    data_type: "UUID"
+    // Ensure that the ID is always present, so min_count is 1.
+    min_count: 1
+  }];
+  string given_name = 2 [(gen_fake.fake_data).data_type = "FirstName"];
+  string family_name = 3 [(gen_fake.fake_data) = {
+    data_type: "LastName"
+    language: "PT_BR"
+  }];
+  Address address = 4;
+  repeated Phone phone_numbers = 5 [(gen_fake.fake_data) = {
+    min_count: 4
+    max_count: 7
+    language: "PT_BR"
+  }];
+  string email = 6 [(gen_fake.fake_data).data_type = "SafeEmail"];
+  string joined_date = 7 [(gen_fake.fake_data).data_type = "DateTime"];
+
+  // Note: A better message construct *should only* use customer IDs, the entire
+  // customer message is being used simply to show a more complex example more easily.
+  // Note: A better message construct *should only* use customer IDs, the entire
+  // customer message is being used simply to show a more complex example more easily.
+  // Note: If this were set to recursively inject a `Customer` message, the fake
+  // data generation would have errors in it, because the recursion cannot accurately
+  // capture unique message full names. Eg, there will not be a message of type
+  // `examples.Customer.friends.phone_numbers` or similar, so the fake data generation will fail.
+  repeated string friend_ids = 8 [(gen_fake.fake_data) = {
+    data_type: "UUID"
+    min_count: 0
+    max_count: 2
+  }];
+}
+
 message Address {
   Street street = 1;
   string city = 2 [(gen_fake.fake_data).data_type = "CityName"];
   string country = 3 [(gen_fake.fake_data).data_type = "CountryName"];
   message Street {
     uint32 number = 1 [(gen_fake.fake_data).data_type = "WholeNumber"];
-    string name = 2 [(gen_fake.fake_data).data_type =  "StreetName"];
+    string name = 2 [(gen_fake.fake_data).data_type = "StreetName"];
   }
+}
 
-
-  string street
-  
-  string id = 1 [(gen_fake.fake_data).data_type = "SafeEmail"];
-  string name = 2 [(gen_fake.fake_data) = {
-    data_type: "FirstName"
-    language: "FR_FR"
-  }];
-  string family_name = 3 [(gen_fake.fake_data) = {
-    data_type: "LastName"
-    language: "PT_BR"
-  }];
-  repeated string phone_numbers = 4 [(gen_fake.fake_data) = {
+message Phone {
+  string number = 1 [(gen_fake.fake_data) = {
     data_type: "PhoneNumber"
     min_count: 1
     max_count: 3
+    language: "PT_BR"
   }];
+  // Phone type, such as "Mobile", "Home", "Work", etc.
+  // In the future, a random generation of enums should be supported.
+  PhoneType type = 2;
+  enum PhoneType {
+    PHONE_TYPE_UNSPECIFIED = 0;
+    MOBILE = 1;
+    HOME = 2;
+    WORK = 3;
+    OTHER = 4;
+  }
 }

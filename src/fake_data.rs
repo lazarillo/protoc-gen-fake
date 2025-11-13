@@ -2,16 +2,16 @@ use crate::utils::SupportedLanguage;
 use fake::base64::*;
 use fake::uuid::*;
 use fake::{
-    Fake, // Import specific locale instances directly from `fake::locales`
     faker::{
         address::raw::*, barcode::raw::*, chrono::raw::*, company::raw::*, creditcard::raw::*,
         currency::raw::*, filesystem::raw::*, finance::raw::*, internet::raw::*, job::raw::*,
         lorem::raw::*, name::raw::*, phone_number::raw::*,
     },
     locales::{AR_SA, DE_DE, EN, FR_FR, IT_IT, JA_JP, PT_BR, PT_PT, ZH_CN, ZH_TW},
+    Fake, // Import specific locale instances directly from `fake::locales`
 };
 use prost_reflect::{Kind as ProstFieldKind, Value as ProstFieldValue};
-use rand::{Rng, rngs::ThreadRng};
+use rand::{rngs::ThreadRng, Rng};
 use serde::Serialize; // Import Serialize trait for JSON serialization
 use serde_json::Value as JsonValue; // Import JsonValue for JSON handling
 use std::fmt; // Import Display trait for formatting // Import Rng for random number generation
@@ -1004,8 +1004,8 @@ mod fake_data_tests {
         assert!(fake_name.is_some()); // Assert that a value was returned
         if let Some(FakeData::FirstName(name)) = fake_name {
             assert!(!name.is_empty()); // Assert the generated name is not empty
-        // You could add more specific checks here if you knew the expected format,
-        // e.g., regex for names, but for random data, non-empty is a good start.
+                                       // You could add more specific checks here if you knew the expected format,
+                                       // e.g., regex for names, but for random data, non-empty is a good start.
         } else {
             panic!("Expected FakeData::FirstName variant"); // Fail if it's not the expected variant
         }

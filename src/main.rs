@@ -55,25 +55,26 @@
 //! It unfortunately needs to use both `prost` and `protobuf` crates to manage this, because`prost` does
 //! not expose custom options, and `protobuf` does not support dynamic messages.
 
-use base64::{Engine as _, engine::general_purpose};
+use base64::{engine::general_purpose, Engine as _};
 use prost::Message;
 use prost_reflect::{Cardinality, DynamicMessage, Value};
-use protobuf::Message as PbMessage;
 use protobuf::plugin::{
     CodeGeneratorRequest as PbCodeGeneratorRequest,
     CodeGeneratorResponse as PbCodeGeneratorResponse,
 };
+use protobuf::Message as PbMessage;
 use rand::Rng;
-use serde_json::{Map as JsonMap, Value as JsonValue, to_vec_pretty}; // Import serde_json for JSON handling
+use serde_json::{to_vec_pretty, Map as JsonMap, Value as JsonValue}; // Import serde_json for JSON handling
 use std::cmp::max;
+use std::collections::HashMap;
 use std::fs;
 pub mod utils; // Import utility functions for parsing request parameters
 use std::io::{self, Read, Write};
 use std::path::Path;
 use std::str::FromStr;
 use utils::{
-    DataOutputType, DesiredOutputFormat, SupportedLanguage, choose_language, get_key_files,
-    parse_request_parameters,
+    choose_language, get_fake_data_cardinality, get_key_files, parse_request_parameters, DataType,
+    DesiredOutputFormat, SupportedLanguage,
 }; // Import Path for file handling // Import locales for fake data generation // Import Lazy for static initialization
 
 #[path = "./gen_protobuf/fake_field.rs"]
@@ -103,7 +104,7 @@ fn main() -> io::Result<()> {
         .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
 
     // Log full request at DEBUG level (only shows with RUST_LOG=debug or lower)
-    log::debug!("Full CodeGeneratorRequest received: {:#?}", request);
+    log::trace!("Full CodeGeneratorRequest received: {:#?}", request);
 
     // Parse the request parameters to get output format and output path, or populate defaults
     let (output_format, output_path, global_language, force_global_language) =
@@ -111,6 +112,15 @@ fn main() -> io::Result<()> {
 
     // Get the set of files to generate (explicitly requested by protoc)
     let key_files = get_key_files(&request);
+    log::debug!(
+        "{} key file(s) to generate fake data over:\n{}",
+        key_files.len(),
+        key_files
+            .iter()
+            .map(|f| f.as_str())
+            .collect::<Vec<&str>>()
+            .join("\n")
+    );
 
     // Build the runtime descriptor pool, including what is passed by the user
     let runtime_descriptor_pool = get_runtime_descriptor_pool(&request);
@@ -141,14 +151,14 @@ fn main() -> io::Result<()> {
                 DesiredOutputFormat::Json => format!("{}.json", file_stem),
                 DesiredOutputFormat::Protobuf => format!("{}.b64", file_stem),
             };
-            log::warn!(" output file: {}", output_name);
+            log::info!("    output file: {}", output_name);
             let mut binary_name = "output.bin".to_string();
             if output_format == DesiredOutputFormat::Protobuf {
                 let binary_path = Path::new(&output_path)
                     .join(file_stem)
                     .with_extension("bin");
                 binary_name = binary_path.to_string_lossy().to_string();
-                log::warn!(" binary path: {}", binary_name);
+                log::info!("    binary path: {}", binary_name);
             }
             let mut all_messages: Vec<DynamicMessage> = Vec::new();
             let mut all_json_messages: Vec<JsonMap<String, JsonValue>> = Vec::new();
@@ -156,9 +166,14 @@ fn main() -> io::Result<()> {
                 .ok_or_else(|| {
                     io::Error::new(
                         io::ErrorKind::NotFound,
-                        format!("File '{}' not found in (`prost-reflect`) runtime descriptor pool. This should not happen if {} is valid", filename, filename),
+                        format!(
+                            "File '{}' not found in (`prost-reflect`) runtime descriptor pool. This should not happen if {} is valid",
+                            filename, filename
+                        ),
                     )
                 })?;
+            let mut overall_min_count: HashMap<String, Option<u32>> = HashMap::new();
+            let mut overall_max_count: HashMap<String, Option<u32>> = HashMap::new();
             ////////////////////////////////////////////////////////////////////////////
             // Iterate through the messages in the key files                         ///
             ////////////////////////////////////////////////////////////////////////////
@@ -176,7 +191,7 @@ fn main() -> io::Result<()> {
                     let is_list_field = field_descr.is_list();
                     let is_map_field = field_descr.is_map();
 
-                    let mut fake_field_value: Option<DataOutputType> = None;
+                    let mut fake_field_value: Option<DataType> = None;
                     let message_proto = file_descr
                         .message_type
                         .iter()
@@ -203,6 +218,25 @@ fn main() -> io::Result<()> {
                     if let Some(pb_options) = field_proto.options.as_ref() {
                         // Use rust-protobuf's get_extension for your custom option
                         if let Some(fake_data_option) = fake_data.get(pb_options) {
+                            get_fake_data_cardinality(
+                                &field_descr,
+                                &fake_data_option,
+                                &mut overall_min_count,
+                                &mut overall_max_count,
+                            );
+                            log::error!("\nFld: {} min:\n    {:?}", field_name, overall_min_count);
+                            log::error!("\nFld: {} max:\n    {:?}", field_name, overall_max_count);
+                            // TODO: I need to figure out a better way to handle messages:
+                            // The message *count* should impact the number of times the message
+                            // *underlying fields* are generated, but it needs to be repeated as
+                            // part of the entire message. Ie, if the "phone_numbers" field
+                            // has a min_count of 2, then the message should be repeated twice,
+                            // meaning that there is a *single message* with *both* the type and
+                            // actual number, and then there is another *single message* with
+                            // the type and actual number, and so on.
+                            // I *think that* I'm now creating it so that there are two types and
+                            // two numbers, not two messages with one each.
+
                             let data_type = fake_data_option.data_type.as_str();
                             let field_level_language = match SupportedLanguage::from_str(
                                 fake_data_option.language.as_str(),
@@ -223,7 +257,13 @@ fn main() -> io::Result<()> {
                                 let mut repeated_values = Vec::new();
 
                                 let num_values = rng.random_range(min_count..=max_count);
-
+                                if num_values == 0 {
+                                    log::info!(
+                                        "Field '{}' has a minimum of {} values and no value was generated.",
+                                        field_name,
+                                        min_count,
+                                    );
+                                }
                                 for _ in 0..num_values {
                                     let fake_value = get_fake_data_output_value(
                                         data_type,
@@ -232,21 +272,19 @@ fn main() -> io::Result<()> {
                                         field_kind,
                                     );
                                     match fake_value {
-                                        DataOutputType::Json(json_value) => {
+                                        DataType::Json(json_value) => {
                                             json_values.push(json_value);
                                         }
-                                        DataOutputType::Protobuf(proto_value) => {
+                                        DataType::Protobuf(proto_value) => {
                                             repeated_values.push(proto_value);
                                         }
                                     }
                                 }
                                 fake_field_value = match output_format {
                                     DesiredOutputFormat::Json => {
-                                        Some(DataOutputType::Json(JsonValue::Array(json_values)))
+                                        Some(DataType::Json(JsonValue::Array(json_values)))
                                     }
-                                    _ => {
-                                        Some(DataOutputType::Protobuf(Value::List(repeated_values)))
-                                    }
+                                    _ => Some(DataType::Protobuf(Value::List(repeated_values))),
                                 };
                             } else if field_cardinality == Cardinality::Required {
                                 // For required fields, we generate a single value
@@ -258,7 +296,9 @@ fn main() -> io::Result<()> {
                                 ));
                             } else if field_cardinality == Cardinality::Optional {
                                 // For optional fields, we generate a single value or leave it unset
-                                let should_generate_value = rng.random_bool(0.5);
+                                // 0.5 gives 50/50 chance of generating a value, which seems too
+                                // low, so we increase it to 0.6 to fill out optionals more often
+                                let should_generate_value = rng.random_bool(0.6);
                                 if should_generate_value || min_count > 0 {
                                     fake_field_value = Some(get_fake_data_output_value(
                                         data_type,
@@ -267,21 +307,23 @@ fn main() -> io::Result<()> {
                                         field_kind,
                                     ));
                                 } else {
-                                    fake_field_value = None::<DataOutputType>; // Leave it unset
+                                    fake_field_value = None::<DataType>; // Leave it unset
+                                    log::info!(
+                                        "Field '{}' is optional and no value was generated.",
+                                        field_name
+                                    );
                                 }
                             } else {
                                 // The field is repeated, but not a list
                                 // Map fields are not supported yet
                                 fake_field_value = match output_format {
                                     DesiredOutputFormat::Json => {
-                                        Some(DataOutputType::Json(JsonValue::Object(
-                                            Default::default(),
-                                        ))) // Placeholder for JSON
+                                        Some(DataType::Json(JsonValue::Object(Default::default())))
+                                        // Placeholder for JSON
                                     }
                                     _ => {
-                                        Some(DataOutputType::Protobuf(Value::Map(
-                                            Default::default(),
-                                        ))) // Placeholder for Protobuf
+                                        Some(DataType::Protobuf(Value::Map(Default::default())))
+                                        // Placeholder for Protobuf
                                     }
                                 };
                                 log::warn!(
@@ -302,18 +344,24 @@ fn main() -> io::Result<()> {
                         log::debug!("  Field '{}' has no options on it, skipping.", field_name);
                     }
                     match fake_field_value {
-                        Some(DataOutputType::Json(fake_value)) => {
+                        Some(DataType::Json(fake_value)) => {
                             // Insert the JSON field value into the json_message
                             json_message.insert(field_name.to_string(), fake_value);
                         }
-                        Some(DataOutputType::Protobuf(fake_value)) => {
+                        Some(DataType::Protobuf(fake_value)) => {
+                            log::error!(
+                                "AM I GETTING THIS!!! Message:\n  '{}'\nis setting field\n  '{:?}' with value\n  '{:?}'",
+                                message,
+                                field_descr,
+                                fake_value
+                            );
                             // Insert the Protobuf field value into the message
-                            message.set_field(&field_descr, fake_value)
+                            message.set_field(&field_descr, fake_value);
                         }
                         None => {
                             // If no fake data was generated, we can skip setting the field
-                            log::debug!(
-                                "  Field '{}' has no fake data generated, skipping.",
+                            log::trace!(
+                                "    Field '{}' had no fake data generation requested.",
                                 field_name
                             );
                         }
@@ -327,7 +375,7 @@ fn main() -> io::Result<()> {
                         all_messages.push(message);
                     }
                 }
-            }
+            } // end of message iteration
             let mut generated_file_content: Vec<u8> = Vec::new();
             let mut generated_file = protobuf::plugin::code_generator_response::File::new();
             generated_file.set_name(output_name);
@@ -347,8 +395,8 @@ fn main() -> io::Result<()> {
                             )
                         })?;
                     generated_file.set_content(stringified_content);
-                    log::warn!(
-                        "Wrote JSON to the following path: {}",
+                    log::info!(
+                        "Writing JSON to the following path: {}",
                         generated_file.name.clone().unwrap_or("unknown".to_string())
                     );
                 }
@@ -359,7 +407,7 @@ fn main() -> io::Result<()> {
                     }
                     fs::write(&binary_name, &generated_file_content)
                         .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
-                    log::warn!("Wrote binary to the following path: {}", binary_name);
+                    log::info!("Writing binary to the following path: {}", binary_name);
                     let file_content_string =
                         general_purpose::STANDARD.encode(&generated_file_content);
                     generated_file.set_content(file_content_string);

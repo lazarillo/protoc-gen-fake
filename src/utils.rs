@@ -2,22 +2,37 @@
 
 use core::fmt;
 use prost::Message as _;
-use prost_reflect::{DescriptorPool, Kind as ProstFieldKind, Value};
-use prost_types::{FileDescriptorProto, FileDescriptorSet};
-use protobuf::Message as _;
+use prost_reflect::MessageDescriptor;
+use prost_reflect::{
+    DescriptorPool, DynamicMessage, FieldDescriptor, Kind as ProstFieldKind, Value,
+};
+use prost_types::{
+    FieldDescriptorProto as ProstFieldDescriptor, FileDescriptorProto as ProstFileDescriptor,
+    FileDescriptorSet,
+};
+use protobuf::descriptor::FieldDescriptorProto;
 use protobuf::plugin::CodeGeneratorRequest;
-use serde_json::Value as JsonValue;
+use protobuf::{descriptor::FileDescriptorProto, Message as _};
+use serde_json::{Map as JsonMap, Value as JsonValue};
+use std::collections::HashMap;
 use std::collections::HashSet;
-use std::io;
+use std::io::{self, ErrorKind};
 use std::path::PathBuf;
 use std::str::FromStr;
 
 use crate::fake_data::get_fake_data;
+use crate::generated_proto::FakeDataFieldOption;
 
 /// Allow for representation of either JSON or Protobuf output in a single object.
-pub enum DataOutputType {
+#[derive(Debug)]
+pub enum DataType {
     Json(JsonValue),
     Protobuf(Value),
+}
+
+pub enum DataMsg {
+    JsonMsg(JsonMap<String, JsonValue>),
+    ProtoMsg(DynamicMessage),
 }
 
 /// Whether the output format is Protobuf or JSON.
@@ -136,7 +151,7 @@ pub fn parse_request_parameters(
 ) -> (DesiredOutputFormat, PathBuf, SupportedLanguage, bool) {
     let mut output_format = DesiredOutputFormat::Protobuf; // Default output format
     let mut output_path = PathBuf::from("."); // Default output path
-    // No overriding default language, let the fields decide language
+                                              // No overriding default language, let the fields decide language
     let mut language = SupportedLanguage::Default;
     let mut force_global_language = false; // Default to not forcing global language override
     if let Some(params) = request.parameter.as_ref() {
@@ -148,7 +163,7 @@ pub fn parse_request_parameters(
                     key if key.starts_with("form") => match key_val[1].to_lowercase().as_str() {
                         val if val.starts_with("proto") | val.starts_with("bin") => {
                             output_format = DesiredOutputFormat::Protobuf;
-                            log::info!(
+                            log::debug!(
                                 "Parameter '{}' found, output format set to: {}",
                                 param,
                                 output_format
@@ -156,7 +171,7 @@ pub fn parse_request_parameters(
                         }
                         val if val.starts_with("json") => {
                             output_format = DesiredOutputFormat::Json;
-                            log::info!(
+                            log::debug!(
                                 "Parameter '{}' found, output format set to: {}",
                                 param,
                                 output_format
@@ -172,7 +187,7 @@ pub fn parse_request_parameters(
                     },
                     key if key.starts_with("forc") => {
                         force_global_language = true;
-                        log::info!(
+                        log::debug!(
                             "Parameter '{}' found, forcing global language override set to: {}",
                             param,
                             force_global_language
@@ -180,7 +195,7 @@ pub fn parse_request_parameters(
                     }
                     key if key.starts_with("out") => {
                         output_path = PathBuf::from(key_val[1]);
-                        log::info!(
+                        log::debug!(
                             "Parameter '{}' found, output path set to: {}",
                             param,
                             output_path.to_str().unwrap_or("unknown")
@@ -199,7 +214,7 @@ pub fn parse_request_parameters(
                                 SupportedLanguage::Default
                             }
                         };
-                        log::info!("Parameter '{}' found, language set to: {}", param, language);
+                        log::debug!("Parameter '{}' found, language set to: {}", param, language);
                     }
                     _ => {
                         log::warn!(
@@ -216,7 +231,7 @@ pub fn parse_request_parameters(
             }
         }
     } else {
-        log::info!(
+        log::debug!(
             "No parameters provided, using default output format, language, and path: '{}', '{}' and '{}'",
             output_format,
             language,
@@ -246,7 +261,7 @@ pub fn get_runtime_descriptor_pool(request: &CodeGeneratorRequest) -> Descriptor
             let pb_bytes = pb_fd
                 .write_to_bytes()
                 .expect("Failed to serialize protobuf::descriptor::FileDescriptorProto");
-            FileDescriptorProto::decode(pb_bytes.as_ref())
+            ProstFileDescriptor::decode(pb_bytes.as_ref())
                 .expect("Failed to decode prost_types::FileDescriptorProto")
         })
         .collect();
@@ -261,13 +276,13 @@ pub fn get_runtime_descriptor_pool(request: &CodeGeneratorRequest) -> Descriptor
             })
             .expect("Failed to build runtime DescriptorPool");
     log::debug!(
-        "Runtime descriptor pool built successfully with the following {} files: {}",
+        "Runtime descriptor pool built using the following {} files:\n{}",
         runtime_descriptor_pool.files().len(),
         runtime_descriptor_pool
             .files()
             .map(|f| f.name().to_string())
             .collect::<Vec<String>>()
-            .join(", ")
+            .join("\n")
     );
     runtime_descriptor_pool
 }
@@ -298,40 +313,135 @@ pub fn choose_language(
     }
 }
 
+pub fn get_fake_data_cardinality(
+    field_descr: &FieldDescriptor,
+    fake_data_option: &FakeDataFieldOption,
+    min_count: &mut HashMap<String, Option<u32>>,
+    max_count: &mut HashMap<String, Option<u32>>,
+) -> () {
+    let new_min_count: Option<u32> = match fake_data_option.min_count.try_into() {
+        Ok(0) => None,
+        Ok(val) => Some(val),
+        Err(_) => None,
+    };
+    let new_max_count: Option<u32> = match fake_data_option.max_count.try_into() {
+        Ok(0) => None,
+        Ok(val) => Some(val),
+        Err(_) => None,
+    };
+    match field_descr.kind() {
+        // ProstFieldKind::Message(msg_descr) => {
+        //     // For a message field, we want to generate fake data based upon the attributes
+        //     // *within* the message, so we need to place cardinality on the message fields
+        //     msg_descr.fields().into_iter().for_each(|msg_field| {
+        //         min_count
+        //             .entry(msg_field.full_name().to_string())
+        //             .and_modify(|new_min| {
+        //                 if let Some(val) = new_min {
+        //                     if let Some(v) = new_min_count {
+        //                         *new_min = Some(*val * v);
+        //                     }
+        //                 } else {
+        //                     *new_min = new_min_count;
+        //                 }
+        //             })
+        //             .or_insert(new_min_count);
+        //         max_count
+        //             .entry(msg_field.full_name().to_string())
+        //             .and_modify(|new_max| {
+        //                 if let Some(val) = new_max {
+        //                     if let Some(v) = new_max_count {
+        //                         *new_max = Some(*val * v);
+        //                     }
+        //                 } else {
+        //                     *new_max = new_max_count;
+        //                 }
+        //             })
+        //             .or_insert(new_max_count);
+        //     });
+        // }
+        _ => {
+            min_count
+                .entry(field_descr.full_name().to_string())
+                .insert_entry(new_min_count);
+            max_count
+                .entry(field_descr.full_name().to_string())
+                .insert_entry(new_max_count);
+        }
+    }
+}
+
+pub fn iterate_message(
+    msg_descr: &MessageDescriptor,    // from prost_reflect::descriptor
+    file_descr: &FileDescriptorProto, // from protobuf::descriptor
+    output_format: &DesiredOutputFormat,
+) -> DataMsg {
+    let mut output_msg = match output_format {
+        DesiredOutputFormat::Json => DataMsg::JsonMsg(JsonMap::<String, JsonValue>::new()),
+        _ => DataMsg::ProtoMsg(DynamicMessage::new(msg_descr.clone())),
+    };
+    for field_descr in msg_descr.fields() {
+        let field_msg = match field_descr.kind() {
+            ProstFieldKind::Message(inner_msg) => {
+                iterate_message(&inner_msg, file_descr, output_format)
+            }
+            _ => DataMsg::JsonMsg(JsonMap::new()),
+        };
+    }
+    output_msg
+}
+
+pub fn get_field_descriptor<'a>(
+    file_descr: &'a FileDescriptorProto,
+    msg_name: &'a str,
+    field_name: &'a str,
+) -> &'a FieldDescriptorProto {
+    let msg_proto = file_descr
+        .message_type
+        .iter()
+        .find(|msg| msg.name.as_deref() == Some(msg_name))
+        .expect(format!("Protobuf DescriptorProto for '{}' not found", msg_name).as_str());
+    msg_proto
+        .field
+        .iter()
+        .find(|fld| fld.name.as_deref() == Some(field_name))
+        .expect(
+            format!(
+                "Protobuf FieldDescriptorProto for '{}' not found",
+                field_name
+            )
+            .as_str(),
+        )
+}
+
 pub fn get_fake_data_output_value(
     data_type: &str,
     language: &SupportedLanguage,
     output_format: &DesiredOutputFormat,
     field_kind: &ProstFieldKind,
-) -> DataOutputType {
+) -> DataType {
     let possible_value = get_fake_data(data_type, language);
-    log::debug!(
-        "get_fake_data_output_value: data_type='{}', language='{}', possible_value={:?}",
-        data_type,
-        language,
-        possible_value
-    );
     match output_format {
         DesiredOutputFormat::Json => {
             // Note: this match is only needed for better logging information.
             match &possible_value {
                 Some(fake_val) => {
                     log::info!(
-                        "    Fake data type '{}' in '{}':  '{}'",
+                        "    Fake data type '{}' in '{}': '{}'",
                         data_type,
                         language,
                         &fake_val.to_string()
                     );
                 }
                 None => {
-                    log::info!(
+                    log::warn!(
                         "    No fake data found for type '{}' in '{}'",
                         data_type,
                         language
                     );
                 }
             }
-            DataOutputType::Json(possible_value.unwrap_or_default().into_json_value())
+            DataType::Json(possible_value.unwrap_or_default().into_json_value())
         }
         _ => {
             // Note: this match is only needed for better logging information.
@@ -345,14 +455,14 @@ pub fn get_fake_data_output_value(
                     );
                 }
                 None => {
-                    log::info!(
+                    log::warn!(
                         "    No fake data found for type '{}' in '{}'",
                         data_type,
                         language
                     );
                 }
             }
-            DataOutputType::Protobuf(
+            DataType::Protobuf(
                 possible_value
                     .unwrap_or_default()
                     .into_prost_reflect_value(field_kind),
@@ -485,7 +595,7 @@ mod utils_tests {
             &ProstFieldKind::String,
         );
         match output {
-            DataOutputType::Json(value) => {
+            DataType::Json(value) => {
                 assert!(value.is_string());
                 assert!(!value.as_str().unwrap().is_empty());
             }
@@ -503,7 +613,7 @@ mod utils_tests {
             &ProstFieldKind::Int32,
         );
         match output {
-            DataOutputType::Protobuf(value) => {
+            DataType::Protobuf(value) => {
                 // Removed assert!(value.is_i32()); as it doesn't exist
                 let age = value.as_i32().unwrap(); // Directly unwrap the Option<i32>
                 assert!(age >= 8 && age <= 90);
@@ -522,7 +632,7 @@ mod utils_tests {
             &ProstFieldKind::String,
         );
         match output {
-            DataOutputType::Json(value) => {
+            DataType::Json(value) => {
                 assert!(value.is_array());
                 let arr = value.as_array().unwrap();
                 // assert!(!arr.is_empty());
@@ -546,7 +656,7 @@ mod utils_tests {
             &ProstFieldKind::String,
         );
         match output {
-            DataOutputType::Protobuf(value) => {
+            DataType::Protobuf(value) => {
                 assert!(value.as_list().is_some());
                 let list = value.as_list().unwrap();
                 // assert!(!list.is_empty());
