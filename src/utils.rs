@@ -2,26 +2,54 @@
 
 use core::fmt;
 use prost::Message as _;
-use prost_reflect::MessageDescriptor;
 use prost_reflect::{
-    DescriptorPool, DynamicMessage, FieldDescriptor, Kind as ProstFieldKind, Value,
+    DescriptorPool, DynamicMessage, Kind as ProstFieldKind, Value,
 };
 use prost_types::{
-    FieldDescriptorProto as ProstFieldDescriptor, FileDescriptorProto as ProstFileDescriptor,
+    FileDescriptorProto as ProstFileDescriptor,
     FileDescriptorSet,
 };
-use protobuf::descriptor::FieldDescriptorProto;
 use protobuf::plugin::CodeGeneratorRequest;
-use protobuf::{descriptor::FileDescriptorProto, Message as _};
+use protobuf::{descriptor::DescriptorProto, descriptor::FileDescriptorProto, Message as _};
+use rand::prelude::IndexedRandom;
 use serde_json::{Map as JsonMap, Value as JsonValue};
-use std::collections::HashMap;
 use std::collections::HashSet;
-use std::io::{self, ErrorKind};
+use std::io::{self};
 use std::path::PathBuf;
 use std::str::FromStr;
 
 use crate::fake_data::get_fake_data;
-use crate::generated_proto::FakeDataFieldOption;
+
+/// Recursively searches for a message descriptor by name within a file descriptor.
+pub fn find_message_proto<'a>(
+    file_descriptor: &'a FileDescriptorProto,
+    message_name: &str,
+) -> Option<&'a DescriptorProto> {
+    for msg in file_descriptor.message_type.iter() {
+        if msg.name() == message_name {
+            return Some(msg);
+        }
+        if let Some(found) = find_nested_message(msg, message_name) {
+            return Some(found);
+        }
+    }
+    None
+}
+
+fn find_nested_message<'a>(
+    parent_msg: &'a DescriptorProto,
+    message_name: &str,
+) -> Option<&'a DescriptorProto> {
+    for nested_msg in parent_msg.nested_type.iter() {
+        if nested_msg.name() == message_name {
+            return Some(nested_msg);
+        }
+        if let Some(found) = find_nested_message(nested_msg, message_name) {
+            return Some(found);
+        }
+    }
+    None
+}
 
 /// Allow for representation of either JSON or Protobuf output in a single object.
 #[derive(Debug)]
@@ -313,107 +341,6 @@ pub fn choose_language(
     }
 }
 
-pub fn get_fake_data_cardinality(
-    field_descr: &FieldDescriptor,
-    fake_data_option: &FakeDataFieldOption,
-    min_count: &mut HashMap<String, Option<u32>>,
-    max_count: &mut HashMap<String, Option<u32>>,
-) -> () {
-    let new_min_count: Option<u32> = match fake_data_option.min_count.try_into() {
-        Ok(0) => None,
-        Ok(val) => Some(val),
-        Err(_) => None,
-    };
-    let new_max_count: Option<u32> = match fake_data_option.max_count.try_into() {
-        Ok(0) => None,
-        Ok(val) => Some(val),
-        Err(_) => None,
-    };
-    match field_descr.kind() {
-        // ProstFieldKind::Message(msg_descr) => {
-        //     // For a message field, we want to generate fake data based upon the attributes
-        //     // *within* the message, so we need to place cardinality on the message fields
-        //     msg_descr.fields().into_iter().for_each(|msg_field| {
-        //         min_count
-        //             .entry(msg_field.full_name().to_string())
-        //             .and_modify(|new_min| {
-        //                 if let Some(val) = new_min {
-        //                     if let Some(v) = new_min_count {
-        //                         *new_min = Some(*val * v);
-        //                     }
-        //                 } else {
-        //                     *new_min = new_min_count;
-        //                 }
-        //             })
-        //             .or_insert(new_min_count);
-        //         max_count
-        //             .entry(msg_field.full_name().to_string())
-        //             .and_modify(|new_max| {
-        //                 if let Some(val) = new_max {
-        //                     if let Some(v) = new_max_count {
-        //                         *new_max = Some(*val * v);
-        //                     }
-        //                 } else {
-        //                     *new_max = new_max_count;
-        //                 }
-        //             })
-        //             .or_insert(new_max_count);
-        //     });
-        // }
-        _ => {
-            min_count
-                .entry(field_descr.full_name().to_string())
-                .insert_entry(new_min_count);
-            max_count
-                .entry(field_descr.full_name().to_string())
-                .insert_entry(new_max_count);
-        }
-    }
-}
-
-pub fn iterate_message(
-    msg_descr: &MessageDescriptor,    // from prost_reflect::descriptor
-    file_descr: &FileDescriptorProto, // from protobuf::descriptor
-    output_format: &DesiredOutputFormat,
-) -> DataMsg {
-    let mut output_msg = match output_format {
-        DesiredOutputFormat::Json => DataMsg::JsonMsg(JsonMap::<String, JsonValue>::new()),
-        _ => DataMsg::ProtoMsg(DynamicMessage::new(msg_descr.clone())),
-    };
-    for field_descr in msg_descr.fields() {
-        let field_msg = match field_descr.kind() {
-            ProstFieldKind::Message(inner_msg) => {
-                iterate_message(&inner_msg, file_descr, output_format)
-            }
-            _ => DataMsg::JsonMsg(JsonMap::new()),
-        };
-    }
-    output_msg
-}
-
-pub fn get_field_descriptor<'a>(
-    file_descr: &'a FileDescriptorProto,
-    msg_name: &'a str,
-    field_name: &'a str,
-) -> &'a FieldDescriptorProto {
-    let msg_proto = file_descr
-        .message_type
-        .iter()
-        .find(|msg| msg.name.as_deref() == Some(msg_name))
-        .expect(format!("Protobuf DescriptorProto for '{}' not found", msg_name).as_str());
-    msg_proto
-        .field
-        .iter()
-        .find(|fld| fld.name.as_deref() == Some(field_name))
-        .expect(
-            format!(
-                "Protobuf FieldDescriptorProto for '{}' not found",
-                field_name
-            )
-            .as_str(),
-        )
-}
-
 pub fn get_fake_data_output_value(
     data_type: &str,
     language: &SupportedLanguage,
@@ -444,6 +371,22 @@ pub fn get_fake_data_output_value(
             DataType::Json(possible_value.unwrap_or_default().into_json_value())
         }
         _ => {
+            if let ProstFieldKind::Enum(enum_descr) = field_kind {
+                if possible_value.is_none() {
+                    let mut rng = rand::rng();
+                    // Filter out the common "_UNSPECIFIED" value at index 0
+                    let values: Vec<_> = enum_descr.values().filter(|v| v.number() != 0).collect();
+                    if let Some(random_value) = values.choose(&mut rng) {
+                        log::info!(
+                            "    Randomly selected enum value for '{}': '{}'",
+                            enum_descr.full_name(),
+                            random_value.name()
+                        );
+                        return DataType::Protobuf(Value::EnumNumber(random_value.number()));
+                    }
+                }
+            }
+
             // Note: this match is only needed for better logging information.
             match &possible_value {
                 Some(fake_val) => {

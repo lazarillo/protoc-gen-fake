@@ -14,7 +14,7 @@ message Customer {
     data_type: "LastName"
     language: "PT_BR"
   }];
-  Address address = 4;
+  Address address = 4 [(gen_fake.fake_data).max_count = 1];
   repeated Phone phone_numbers = 5 [(gen_fake.fake_data) = {
     min_count: 4
     max_count: 7
@@ -39,7 +39,7 @@ message Customer {
 }
 
 message Address {
-  Street street = 1;
+  Street street = 1 [(gen_fake.fake_data).max_count = 1];
   string city = 2 [(gen_fake.fake_data).data_type = "CityName"];
   string country = 3 [(gen_fake.fake_data).data_type = "CountryName"];
   message Street {
@@ -51,13 +51,11 @@ message Address {
 message Phone {
   string number = 1 [(gen_fake.fake_data) = {
     data_type: "PhoneNumber"
-    min_count: 1
-    max_count: 3
     language: "PT_BR"
   }];
   // Phone type, such as "Mobile", "Home", "Work", etc.
   // In the future, a random generation of enums should be supported.
-  PhoneType type = 2;
+  PhoneType type = 2 [(gen_fake.fake_data).max_count = 1];
   enum PhoneType {
     PHONE_TYPE_UNSPECIFIED = 0;
     MOBILE = 1;

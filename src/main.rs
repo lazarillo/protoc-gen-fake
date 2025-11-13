@@ -57,7 +57,8 @@
 
 use base64::{engine::general_purpose, Engine as _};
 use prost::Message;
-use prost_reflect::{Cardinality, DynamicMessage, Value};
+use prost_reflect::{Cardinality, DynamicMessage, MessageDescriptor, Value};
+use protobuf::descriptor::FileDescriptorProto;
 use protobuf::plugin::{
     CodeGeneratorRequest as PbCodeGeneratorRequest,
     CodeGeneratorResponse as PbCodeGeneratorResponse,
@@ -66,14 +67,13 @@ use protobuf::Message as PbMessage;
 use rand::Rng;
 use serde_json::{to_vec_pretty, Map as JsonMap, Value as JsonValue}; // Import serde_json for JSON handling
 use std::cmp::max;
-use std::collections::HashMap;
 use std::fs;
 pub mod utils; // Import utility functions for parsing request parameters
 use std::io::{self, Read, Write};
 use std::path::Path;
 use std::str::FromStr;
 use utils::{
-    choose_language, get_fake_data_cardinality, get_key_files, parse_request_parameters, DataType,
+    choose_language, find_message_proto, get_key_files, parse_request_parameters, DataType,
     DesiredOutputFormat, SupportedLanguage,
 }; // Import Path for file handling // Import locales for fake data generation // Import Lazy for static initialization
 
@@ -161,8 +161,9 @@ fn main() -> io::Result<()> {
                 log::info!("    binary path: {}", binary_name);
             }
             let mut all_messages: Vec<DynamicMessage> = Vec::new();
-            let mut all_json_messages: Vec<JsonMap<String, JsonValue>> = Vec::new();
-            let runtime_file_descriptor = runtime_descriptor_pool.get_file_by_name(filename)
+            let all_json_messages: Vec<JsonMap<String, JsonValue>> = Vec::new();
+            let runtime_file_descriptor = runtime_descriptor_pool
+                .get_file_by_name(filename)
                 .ok_or_else(|| {
                     io::Error::new(
                         io::ErrorKind::NotFound,
@@ -172,8 +173,6 @@ fn main() -> io::Result<()> {
                         ),
                     )
                 })?;
-            let mut overall_min_count: HashMap<String, Option<u32>> = HashMap::new();
-            let mut overall_max_count: HashMap<String, Option<u32>> = HashMap::new();
             ////////////////////////////////////////////////////////////////////////////
             // Iterate through the messages in the key files                         ///
             ////////////////////////////////////////////////////////////////////////////
@@ -181,21 +180,15 @@ fn main() -> io::Result<()> {
                 let message_name = message_descr.name();
                 log::debug!(" Message: {}", message_name);
                 let mut message = DynamicMessage::new(message_descr.clone());
-                // Maybe this can be created only if the json flag is set?
-                let mut json_message: JsonMap<String, JsonValue> = JsonMap::new();
+                // TODO: The JSON output logic is broken for nested messages and needs to be updated.
+                // let mut json_message: JsonMap<String, JsonValue> = JsonMap::new();
                 for field_descr in message_descr.fields() {
                     let field_name = field_descr.name();
-                    // Whether it is optional, required, or repeated
-                    let field_cardinality = field_descr.cardinality();
                     let field_kind = &field_descr.kind();
                     let is_list_field = field_descr.is_list();
-                    let is_map_field = field_descr.is_map();
+                    let field_cardinality = field_descr.cardinality();
 
-                    let mut fake_field_value: Option<DataType> = None;
-                    let message_proto = file_descr
-                        .message_type
-                        .iter()
-                        .find(|m| m.name.as_deref() == Some(message_name))
+                    let message_proto = find_message_proto(file_descr, message_name)
                         .ok_or_else(|| {
                             io::Error::new(
                                 io::ErrorKind::NotFound,
@@ -203,173 +196,106 @@ fn main() -> io::Result<()> {
                             )
                         })?;
 
-                    let field_proto = message_proto
+                    let field_proto = match message_proto
                         .field
                         .iter()
                         .find(|f| f.name.as_deref() == Some(field_name))
-                        .ok_or_else(|| {
-                            io::Error::new(
-                                io::ErrorKind::NotFound,
-                                format!("PbFieldProto for '{}' not found.", field_name),
-                            )
-                        })?;
+                    {
+                        Some(fp) => fp,
+                        None => continue, // Skip if field not found in proto
+                    };
 
-                    // Now, access options using rust-protobuf's FieldOptions
                     if let Some(pb_options) = field_proto.options.as_ref() {
-                        // Use rust-protobuf's get_extension for your custom option
                         if let Some(fake_data_option) = fake_data.get(pb_options) {
-                            get_fake_data_cardinality(
-                                &field_descr,
-                                &fake_data_option,
-                                &mut overall_min_count,
-                                &mut overall_max_count,
-                            );
-                            log::error!("\nFld: {} min:\n    {:?}", field_name, overall_min_count);
-                            log::error!("\nFld: {} max:\n    {:?}", field_name, overall_max_count);
-                            // TODO: I need to figure out a better way to handle messages:
-                            // The message *count* should impact the number of times the message
-                            // *underlying fields* are generated, but it needs to be repeated as
-                            // part of the entire message. Ie, if the "phone_numbers" field
-                            // has a min_count of 2, then the message should be repeated twice,
-                            // meaning that there is a *single message* with *both* the type and
-                            // actual number, and then there is another *single message* with
-                            // the type and actual number, and so on.
-                            // I *think that* I'm now creating it so that there are two types and
-                            // two numbers, not two messages with one each.
-
+                            let min_count = max(fake_data_option.min_count, 0);
+                            let max_count = max(fake_data_option.max_count, max(min_count, 1));
                             let data_type = fake_data_option.data_type.as_str();
-                            let field_level_language = match SupportedLanguage::from_str(
-                                fake_data_option.language.as_str(),
-                            ) {
-                                Ok(lang) => lang,
-                                Err(_) => SupportedLanguage::Default,
-                            };
+                            let field_level_language =
+                                SupportedLanguage::from_str(fake_data_option.language.as_str())
+                                    .unwrap_or_default();
                             let language = &choose_language(
                                 &field_level_language,
                                 &global_language,
                                 force_global_language,
                             );
-                            let min_count = max(fake_data_option.min_count, 0);
-                            let max_count = max(fake_data_option.max_count, max(min_count, 1));
-                            if is_list_field {
-                                // Generate multiple values for list fields
-                                let mut json_values = Vec::new();
-                                let mut repeated_values = Vec::new();
 
-                                let num_values = rng.random_range(min_count..=max_count);
-                                if num_values == 0 {
-                                    log::info!(
-                                        "Field '{}' has a minimum of {} values and no value was generated.",
-                                        field_name,
-                                        min_count,
-                                    );
-                                }
-                                for _ in 0..num_values {
-                                    let fake_value = get_fake_data_output_value(
-                                        data_type,
-                                        language,
+                            if let prost_reflect::Kind::Message(nested_message_descr) = field_kind.clone() {
+                                if is_list_field {
+                                    let mut nested_messages = Vec::new();
+                                    let num_to_create = rng.random_range(min_count..=max_count);
+                                    for _ in 0..num_to_create {
+                                        let nested_msg = generate_fake_message_field(
+                                            &nested_message_descr,
+                                            file_descr,
+                                            &mut rng,
+                                            &output_format,
+                                            &global_language,
+                                            force_global_language,
+                                            &runtime_descriptor_pool,
+                                        )?;
+                                        nested_messages.push(Value::Message(nested_msg));
+                                    }
+                                    message.set_field(&field_descr, Value::List(nested_messages));
+                                } else {
+                                    let nested_msg = generate_fake_message_field(
+                                        &nested_message_descr,
+                                        file_descr,
+                                        &mut rng,
                                         &output_format,
-                                        field_kind,
-                                    );
-                                    match fake_value {
-                                        DataType::Json(json_value) => {
-                                            json_values.push(json_value);
-                                        }
-                                        DataType::Protobuf(proto_value) => {
+                                        &global_language,
+                                        force_global_language,
+                                        &runtime_descriptor_pool,
+                                    )?;
+                                    message.set_field(&field_descr, Value::Message(nested_msg));
+                                }
+                            } else {
+                                // Handle primitive types
+                                let mut fake_field_value: Option<DataType> = None;
+                                if is_list_field {
+                                    let mut repeated_values = Vec::new();
+                                    let num_values = rng.random_range(min_count..=max_count);
+                                    for _ in 0..num_values {
+                                        if let DataType::Protobuf(proto_value) =
+                                            get_fake_data_output_value(
+                                                data_type,
+                                                language,
+                                                &output_format,
+                                                field_kind,
+                                            )
+                                        {
                                             repeated_values.push(proto_value);
                                         }
                                     }
-                                }
-                                fake_field_value = match output_format {
-                                    DesiredOutputFormat::Json => {
-                                        Some(DataType::Json(JsonValue::Array(json_values)))
-                                    }
-                                    _ => Some(DataType::Protobuf(Value::List(repeated_values))),
-                                };
-                            } else if field_cardinality == Cardinality::Required {
-                                // For required fields, we generate a single value
-                                fake_field_value = Some(get_fake_data_output_value(
-                                    data_type,
-                                    language,
-                                    &output_format,
-                                    field_kind,
-                                ));
-                            } else if field_cardinality == Cardinality::Optional {
-                                // For optional fields, we generate a single value or leave it unset
-                                // 0.5 gives 50/50 chance of generating a value, which seems too
-                                // low, so we increase it to 0.6 to fill out optionals more often
-                                let should_generate_value = rng.random_bool(0.6);
-                                if should_generate_value || min_count > 0 {
+                                    fake_field_value =
+                                        Some(DataType::Protobuf(Value::List(repeated_values)));
+                                } else if field_cardinality == Cardinality::Required {
                                     fake_field_value = Some(get_fake_data_output_value(
                                         data_type,
                                         language,
                                         &output_format,
                                         field_kind,
                                     ));
-                                } else {
-                                    fake_field_value = None::<DataType>; // Leave it unset
-                                    log::info!(
-                                        "Field '{}' is optional and no value was generated.",
-                                        field_name
-                                    );
+                                } else if field_cardinality == Cardinality::Optional {
+                                    if rng.random_bool(0.6) || min_count > 0 {
+                                        fake_field_value = Some(get_fake_data_output_value(
+                                            data_type,
+                                            language,
+                                            &output_format,
+                                            field_kind,
+                                        ));
+                                    }
                                 }
-                            } else {
-                                // The field is repeated, but not a list
-                                // Map fields are not supported yet
-                                fake_field_value = match output_format {
-                                    DesiredOutputFormat::Json => {
-                                        Some(DataType::Json(JsonValue::Object(Default::default())))
-                                        // Placeholder for JSON
-                                    }
-                                    _ => {
-                                        Some(DataType::Protobuf(Value::Map(Default::default())))
-                                        // Placeholder for Protobuf
-                                    }
-                                };
-                                log::warn!(
-                                    "Field '{}' has unsupported cardinality mapping: {:?}. Using defaults.",
-                                    field_name,
-                                    is_map_field,
-                                );
+
+                                if let Some(DataType::Protobuf(value)) = fake_field_value {
+                                    message.set_field(&field_descr, value);
+                                }
                             }
-                        // end of `if let Some(fake_data_option) = fake_data.get(pb_options)`
-                        } else {
-                            log::debug!(
-                                "  Field '{}' has no custom FakeDataFieldOption, skipping.",
-                                field_name
-                            );
-                        }
-                    // end of `if let Some(pb_options) = field_proto.options.as_ref()`
-                    } else {
-                        log::debug!("  Field '{}' has no options on it, skipping.", field_name);
-                    }
-                    match fake_field_value {
-                        Some(DataType::Json(fake_value)) => {
-                            // Insert the JSON field value into the json_message
-                            json_message.insert(field_name.to_string(), fake_value);
-                        }
-                        Some(DataType::Protobuf(fake_value)) => {
-                            log::error!(
-                                "AM I GETTING THIS!!! Message:\n  '{}'\nis setting field\n  '{:?}' with value\n  '{:?}'",
-                                message,
-                                field_descr,
-                                fake_value
-                            );
-                            // Insert the Protobuf field value into the message
-                            message.set_field(&field_descr, fake_value);
-                        }
-                        None => {
-                            // If no fake data was generated, we can skip setting the field
-                            log::trace!(
-                                "    Field '{}' had no fake data generation requested.",
-                                field_name
-                            );
                         }
                     }
                 }
                 match output_format {
                     DesiredOutputFormat::Json => {
-                        all_json_messages.push(json_message);
+                        // all_json_messages.push(json_message);
                     }
                     _ => {
                         all_messages.push(message);
@@ -424,3 +350,150 @@ fn main() -> io::Result<()> {
 
     Ok(())
 }
+
+/// Recursively generates a DynamicMessage for a given message descriptor,
+/// populating its fields with fake data based on options.
+fn generate_fake_message_field(
+    message_descr: &MessageDescriptor,
+    file_descr: &FileDescriptorProto, // Need to pass this down for protobuf options
+    rng: &mut impl Rng,
+    output_format: &DesiredOutputFormat,
+    global_language: &SupportedLanguage,
+    force_global_language: bool,
+    runtime_descriptor_pool: &prost_reflect::DescriptorPool, // Need this for nested message descriptors
+) -> io::Result<DynamicMessage> {
+    let mut message = DynamicMessage::new(message_descr.clone());
+
+    for field_descr in message_descr.fields() {
+        let field_name = field_descr.name();
+        let field_cardinality = field_descr.cardinality();
+        let field_kind = &field_descr.kind();
+        let is_list_field = field_descr.is_list();
+
+        let mut fake_field_value: Option<DataType> = None;
+
+        // Find the corresponding protobuf FieldDescriptorProto to get custom options
+        // This is necessary because prost-reflect's FieldDescriptor doesn't expose custom options directly.
+        let message_proto = find_message_proto(file_descr, message_descr.name())
+            .ok_or_else(|| {
+                io::Error::new(
+                    io::ErrorKind::NotFound,
+                    format!("MessageProto for '{}' not found.", message_descr.name()),
+                )
+            })?;
+
+        let field_proto = message_proto
+            .field
+            .iter()
+            .find(|f| f.name.as_deref() == Some(field_name))
+            .ok_or_else(|| {
+                io::Error::new(
+                    io::ErrorKind::NotFound,
+                    format!("PbFieldProto for '{}' not found.", field_name),
+                )
+            })?;
+
+        if let Some(pb_options) = field_proto.options.as_ref() {
+            if let Some(fake_data_option) = fake_data.get(pb_options) {
+                let data_type = fake_data_option.data_type.as_str();
+                let field_level_language = match SupportedLanguage::from_str(
+                    fake_data_option.language.as_str(),
+                ) {
+                    Ok(lang) => lang,
+                    Err(_) => SupportedLanguage::Default,
+                };
+                let language = &choose_language(
+                    &field_level_language,
+                    &global_language,
+                    force_global_language,
+                );
+                let min_count = max(fake_data_option.min_count, 0);
+                let max_count = max(fake_data_option.max_count, max(min_count, 1));
+
+                if let prost_reflect::Kind::Message(nested_message_descr) = field_kind.clone() {
+                    // RECURSIVE CALL FOR NESTED MESSAGE
+                    if is_list_field {
+                        let mut nested_messages = Vec::new();
+                        let num_values = rng.gen_range(min_count..=max_count);
+                        for _ in 0..num_values {
+                            let nested_msg = generate_fake_message_field(
+                                &nested_message_descr,
+                                file_descr,
+                                rng,
+                                output_format,
+                                global_language,
+                                force_global_language,
+                                runtime_descriptor_pool,
+                            )?;
+                            nested_messages.push(nested_msg);
+                        }
+                        message.set_field(&field_descr, Value::List(nested_messages.into_iter().map(Value::Message).collect()));
+                    } else {
+                        let nested_msg = generate_fake_message_field(
+                            &nested_message_descr,
+                            file_descr,
+                            rng,
+                            output_format,
+                            global_language,
+                            force_global_language,
+                            runtime_descriptor_pool,
+                        )?;
+                        message.set_field(&field_descr, Value::Message(nested_msg));
+                    }
+                } else {
+                    // Existing logic for primitive types
+                    if is_list_field {
+                        // Generate multiple values for list fields
+                        let mut repeated_values = Vec::new();
+                        let num_values = rng.gen_range(min_count..=max_count);
+                        for _ in 0..num_values {
+                            let fake_value = get_fake_data_output_value(
+                                data_type,
+                                language,
+                                output_format,
+                                field_kind,
+                            );
+                            if let DataType::Protobuf(proto_value) = fake_value {
+                                repeated_values.push(proto_value);
+                            }
+                        }
+                        fake_field_value = Some(DataType::Protobuf(Value::List(repeated_values)));
+                    } else if field_cardinality == Cardinality::Required {
+                        fake_field_value = Some(get_fake_data_output_value(
+                            data_type,
+                            language,
+                            output_format,
+                            field_kind,
+                        ));
+                    } else if field_cardinality == Cardinality::Optional {
+                        let should_generate_value = rng.gen_bool(0.6);
+                        if should_generate_value || min_count > 0 {
+                            fake_field_value = Some(get_fake_data_output_value(
+                                data_type,
+                                language,
+                                output_format,
+                                field_kind,
+                            ));
+                        }
+                    }
+                }
+            } else {
+                log::debug!(
+                    "  Field '{}' has no custom FakeDataFieldOption, skipping.",
+                    field_name
+                );
+            }
+        } else {
+            log::debug!("  Field '{}' has no options on it, skipping.", field_name);
+        }
+
+        // Only set the field if it's a primitive type and fake_field_value was generated
+        if !matches!(field_kind, prost_reflect::Kind::Message(_)) {
+            if let Some(DataType::Protobuf(fake_value)) = fake_field_value {
+                message.set_field(&field_descr, fake_value);
+            }
+        }
+    }
+    Ok(message)
+}
+
