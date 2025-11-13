@@ -4,6 +4,7 @@ package examples;
 import "gen_fake/fake_field.proto";
 
 message User {
+  option (gen_fake.fake_msg).include = true;
   string id = 1 [(gen_fake.fake_data).data_type = "SafeEmail"];
   string name = 2 [(gen_fake.fake_data) = {
     data_type: "FirstName"

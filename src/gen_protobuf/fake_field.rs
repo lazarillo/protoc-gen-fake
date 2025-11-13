@@ -200,10 +200,134 @@ impl ::protobuf::reflect::ProtobufValue for FakeDataFieldOption {
     type RuntimeType = ::protobuf::reflect::rt::RuntimeTypeMessage<Self>;
 }
 
+// @@protoc_insertion_point(message:gen_fake.FakeDataMessageOption)
+#[derive(PartialEq,Clone,Default,Debug)]
+pub struct FakeDataMessageOption {
+    // message fields
+    // @@protoc_insertion_point(field:gen_fake.FakeDataMessageOption.include)
+    pub include: bool,
+    // special fields
+    // @@protoc_insertion_point(special_field:gen_fake.FakeDataMessageOption.special_fields)
+    pub special_fields: ::protobuf::SpecialFields,
+}
+
+impl<'a> ::std::default::Default for &'a FakeDataMessageOption {
+    fn default() -> &'a FakeDataMessageOption {
+        <FakeDataMessageOption as ::protobuf::Message>::default_instance()
+    }
+}
+
+impl FakeDataMessageOption {
+    pub fn new() -> FakeDataMessageOption {
+        ::std::default::Default::default()
+    }
+
+    fn generated_message_descriptor_data() -> ::protobuf::reflect::GeneratedMessageDescriptorData {
+        let mut fields = ::std::vec::Vec::with_capacity(1);
+        let mut oneofs = ::std::vec::Vec::with_capacity(0);
+        fields.push(::protobuf::reflect::rt::v2::make_simpler_field_accessor::<_, _>(
+            "include",
+            |m: &FakeDataMessageOption| { &m.include },
+            |m: &mut FakeDataMessageOption| { &mut m.include },
+        ));
+        ::protobuf::reflect::GeneratedMessageDescriptorData::new_2::<FakeDataMessageOption>(
+            "FakeDataMessageOption",
+            fields,
+            oneofs,
+        )
+    }
+}
+
+impl ::protobuf::Message for FakeDataMessageOption {
+    const NAME: &'static str = "FakeDataMessageOption";
+
+    fn is_initialized(&self) -> bool {
+        true
+    }
+
+    fn merge_from(&mut self, is: &mut ::protobuf::CodedInputStream<'_>) -> ::protobuf::Result<()> {
+        while let Some(tag) = is.read_raw_tag_or_eof()? {
+            match tag {
+                8 => {
+                    self.include = is.read_bool()?;
+                },
+                tag => {
+                    ::protobuf::rt::read_unknown_or_skip_group(tag, is, self.special_fields.mut_unknown_fields())?;
+                },
+            };
+        }
+        ::std::result::Result::Ok(())
+    }
+
+    // Compute sizes of nested messages
+    #[allow(unused_variables)]
+    fn compute_size(&self) -> u64 {
+        let mut my_size = 0;
+        if self.include != false {
+            my_size += 1 + 1;
+        }
+        my_size += ::protobuf::rt::unknown_fields_size(self.special_fields.unknown_fields());
+        self.special_fields.cached_size().set(my_size as u32);
+        my_size
+    }
+
+    fn write_to_with_cached_sizes(&self, os: &mut ::protobuf::CodedOutputStream<'_>) -> ::protobuf::Result<()> {
+        if self.include != false {
+            os.write_bool(1, self.include)?;
+        }
+        os.write_unknown_fields(self.special_fields.unknown_fields())?;
+        ::std::result::Result::Ok(())
+    }
+
+    fn special_fields(&self) -> &::protobuf::SpecialFields {
+        &self.special_fields
+    }
+
+    fn mut_special_fields(&mut self) -> &mut ::protobuf::SpecialFields {
+        &mut self.special_fields
+    }
+
+    fn new() -> FakeDataMessageOption {
+        FakeDataMessageOption::new()
+    }
+
+    fn clear(&mut self) {
+        self.include = false;
+        self.special_fields.clear();
+    }
+
+    fn default_instance() -> &'static FakeDataMessageOption {
+        static instance: FakeDataMessageOption = FakeDataMessageOption {
+            include: false,
+            special_fields: ::protobuf::SpecialFields::new(),
+        };
+        &instance
+    }
+}
+
+impl ::protobuf::MessageFull for FakeDataMessageOption {
+    fn descriptor() -> ::protobuf::reflect::MessageDescriptor {
+        static descriptor: ::protobuf::rt::Lazy<::protobuf::reflect::MessageDescriptor> = ::protobuf::rt::Lazy::new();
+        descriptor.get(|| file_descriptor().message_by_package_relative_name("FakeDataMessageOption").unwrap()).clone()
+    }
+}
+
+impl ::std::fmt::Display for FakeDataMessageOption {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        ::protobuf::text_format::fmt(self, f)
+    }
+}
+
+impl ::protobuf::reflect::ProtobufValue for FakeDataMessageOption {
+    type RuntimeType = ::protobuf::reflect::rt::RuntimeTypeMessage<Self>;
+}
+
 /// Extension fields
 pub mod exts {
 
     pub const fake_data: ::protobuf::ext::ExtFieldOptional<::protobuf::descriptor::FieldOptions, super::FakeDataFieldOption> = ::protobuf::ext::ExtFieldOptional::new(1491, ::protobuf::descriptor::field_descriptor_proto::Type::TYPE_MESSAGE);
+
+    pub const fake_msg: ::protobuf::ext::ExtFieldOptional<::protobuf::descriptor::MessageOptions, super::FakeDataMessageOption> = ::protobuf::ext::ExtFieldOptional::new(1490, ::protobuf::descriptor::field_descriptor_proto::Type::TYPE_MESSAGE);
 }
 
 static file_descriptor_proto_data: &'static [u8] = b"\
@@ -211,9 +335,12 @@ static file_descriptor_proto_data: &'static [u8] = b"\
     escriptor.proto\"\x88\x01\n\x13FakeDataFieldOption\x12\x1b\n\tdata_type\
     \x18\x01\x20\x01(\tR\x08dataType\x12\x1a\n\x08language\x18\x02\x20\x01(\
     \tR\x08language\x12\x1b\n\tmin_count\x18\x03\x20\x01(\x05R\x08minCount\
-    \x12\x1b\n\tmax_count\x18\x04\x20\x01(\x05R\x08maxCount:Z\n\tfake_data\
-    \x18\xd3\x0b\x20\x01(\x0b2\x1d.gen_fake.FakeDataFieldOption\x12\x1d.goog\
-    le.protobuf.FieldOptionsR\x08fakeDatab\x06proto3\
+    \x12\x1b\n\tmax_count\x18\x04\x20\x01(\x05R\x08maxCount\"1\n\x15FakeData\
+    MessageOption\x12\x18\n\x07include\x18\x01\x20\x01(\x08R\x07include:Z\n\
+    \tfake_data\x18\xd3\x0b\x20\x01(\x0b2\x1d.gen_fake.FakeDataFieldOption\
+    \x12\x1d.google.protobuf.FieldOptionsR\x08fakeData:\\\n\x08fake_msg\x18\
+    \xd2\x0b\x20\x01(\x0b2\x1f.gen_fake.FakeDataMessageOption\x12\x1f.google\
+    .protobuf.MessageOptionsR\x07fakeMsgb\x06proto3\
 ";
 
 /// `FileDescriptorProto` object which was a source for this generated file
@@ -232,8 +359,9 @@ pub fn file_descriptor() -> &'static ::protobuf::reflect::FileDescriptor {
         let generated_file_descriptor = generated_file_descriptor_lazy.get(|| {
             let mut deps = ::std::vec::Vec::with_capacity(1);
             deps.push(::protobuf::descriptor::file_descriptor().clone());
-            let mut messages = ::std::vec::Vec::with_capacity(1);
+            let mut messages = ::std::vec::Vec::with_capacity(2);
             messages.push(FakeDataFieldOption::generated_message_descriptor_data());
+            messages.push(FakeDataMessageOption::generated_message_descriptor_data());
             let mut enums = ::std::vec::Vec::with_capacity(0);
             ::protobuf::reflect::GeneratedFileDescriptor::new_generated(
                 file_descriptor_proto(),

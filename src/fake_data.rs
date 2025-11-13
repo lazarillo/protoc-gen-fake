@@ -919,6 +919,7 @@ pub fn get_fake_data(data_type: &str, language: &SupportedLanguage) -> Option<Fa
             ("CityName", CityName, CityName),
             ("CountryName", CountryName, CountryName),
             ("CountryCode", CountryCode, CountryCode),
+            ("StreetName", StreetName, StreetName),
             ("StreetSuffix", StreetSuffix, StreetSuffix),
             ("TimeZone", TimeZone, TimeZone),
             ("StateName", StateName, StateName),

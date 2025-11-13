@@ -4,6 +4,7 @@ package examples;
 import "gen_fake/fake_field.proto";
 
 message Customer {
+  option (gen_fake.fake_msg).include = true;
   string id = 1 [(gen_fake.fake_data) = {
     data_type: "UUID"
     // Ensure that the ID is always present, so min_count is 1.
@@ -14,11 +15,11 @@ message Customer {
     data_type: "LastName"
     language: "PT_BR"
   }];
-  Address address = 4 [(gen_fake.fake_data).max_count = 1];
+  // Allow for `address` to be populated, but without any specifications.
+  Address address = 4 [(gen_fake.fake_data) = {}];
   repeated Phone phone_numbers = 5 [(gen_fake.fake_data) = {
-    min_count: 4
-    max_count: 7
-    language: "PT_BR"
+    min_count: 1
+    max_count: 3
   }];
   string email = 6 [(gen_fake.fake_data).data_type = "SafeEmail"];
   string joined_date = 7 [(gen_fake.fake_data).data_type = "DateTime"];
@@ -34,12 +35,12 @@ message Customer {
   repeated string friend_ids = 8 [(gen_fake.fake_data) = {
     data_type: "UUID"
     min_count: 0
-    max_count: 2
+    max_count: 13
   }];
 }
 
 message Address {
-  Street street = 1 [(gen_fake.fake_data).max_count = 1];
+  Street street = 1 [(gen_fake.fake_data) = {}];
   string city = 2 [(gen_fake.fake_data).data_type = "CityName"];
   string country = 3 [(gen_fake.fake_data).data_type = "CountryName"];
   message Street {
@@ -52,10 +53,11 @@ message Phone {
   string number = 1 [(gen_fake.fake_data) = {
     data_type: "PhoneNumber"
     language: "PT_BR"
+    min_count: 1
   }];
   // Phone type, such as "Mobile", "Home", "Work", etc.
   // In the future, a random generation of enums should be supported.
-  PhoneType type = 2 [(gen_fake.fake_data).max_count = 1];
+  PhoneType type = 2 [(gen_fake.fake_data).min_count = 1];
   enum PhoneType {
     PHONE_TYPE_UNSPECIFIED = 0;
     MOBILE = 1;

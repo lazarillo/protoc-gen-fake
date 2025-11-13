@@ -40,3 +40,10 @@ pub struct FakeDataFieldOption {
     #[prost(int32, tag = "4")]
     pub max_count: i32,
 }
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct FakeDataMessageOption {
+    /// If set to true, this message will be the one for which fake data is generated.
+    /// If multiple messages have this set to true, only the first one will be used.
+    #[prost(bool, tag = "1")]
+    pub include: bool,
+}

@@ -54,7 +54,18 @@ message FakeDataFieldOption {
   int32 max_count = 4;
 }
 
+message FakeDataMessageOption {
+  // If set to true, this message will be the one for which fake data is generated.
+  // If multiple messages have this set to true, only the first one will be used.
+  bool include = 1;
+}
+
 extend google.protobuf.FieldOptions {
-  // Fake data generation options
+  // Fake data generation options at the field level
   FakeDataFieldOption fake_data = 1491;
+}
+
+extend google.protobuf.MessageOptions {
+  // Fake data generation options for messages
+  FakeDataMessageOption fake_msg = 1490;
 }
