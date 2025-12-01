@@ -24,14 +24,6 @@ message Customer {
   string email = 6 [(gen_fake.fake_data).data_type = "SafeEmail"];
   string joined_date = 7 [(gen_fake.fake_data).data_type = "DateTime"];
 
-  // Note: A better message construct *should only* use customer IDs, the entire
-  // customer message is being used simply to show a more complex example more easily.
-  // Note: A better message construct *should only* use customer IDs, the entire
-  // customer message is being used simply to show a more complex example more easily.
-  // Note: If this were set to recursively inject a `Customer` message, the fake
-  // data generation would have errors in it, because the recursion cannot accurately
-  // capture unique message full names. Eg, there will not be a message of type
-  // `examples.Customer.friends.phone_numbers` or similar, so the fake data generation will fail.
   repeated string friend_ids = 8 [(gen_fake.fake_data) = {
     data_type: "UUID"
     min_count: 0
