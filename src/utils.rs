@@ -79,6 +79,42 @@ impl fmt::Display for DesiredOutputFormat {
     }
 }
 
+/// The encoding of the output file.
+#[derive(Debug, PartialEq, Clone)]
+pub enum OutputEncoding {
+    Binary,
+    Base64,
+    Both,
+}
+
+impl Default for OutputEncoding {
+    fn default() -> Self {
+        OutputEncoding::Binary
+    }
+}
+
+impl fmt::Display for OutputEncoding {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            OutputEncoding::Binary => write!(f, "Binary"),
+            OutputEncoding::Base64 => write!(f, "Base64"),
+            OutputEncoding::Both => write!(f, "Both (Binary and Base64)"),
+        }
+    }
+}
+
+impl FromStr for OutputEncoding {
+    type Err = String;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_ascii_lowercase().as_str() {
+            "bin" | "binary" => Ok(OutputEncoding::Binary),
+            "b64" | "base64" => Ok(OutputEncoding::Base64),
+            "both" => Ok(OutputEncoding::Both),
+            _ => Err(format!("Invalid encoding: {}", s)),
+        }
+    }
+}
+
 #[derive(PartialEq, Clone)]
 #[allow(non_camel_case_types)]
 pub enum SupportedLanguage {
@@ -176,12 +212,20 @@ impl std::fmt::Debug for SupportedLanguage {
 /// Parse the request from protoc to extract and return output format and output path.
 pub fn parse_request_parameters(
     request: &CodeGeneratorRequest,
-) -> (DesiredOutputFormat, PathBuf, SupportedLanguage, bool) {
+) -> (
+    DesiredOutputFormat,
+    PathBuf,
+    SupportedLanguage,
+    bool,
+    OutputEncoding,
+) {
     let mut output_format = DesiredOutputFormat::Protobuf; // Default output format
     let mut output_path = PathBuf::from("."); // Default output path
                                               // No overriding default language, let the fields decide language
     let mut language = SupportedLanguage::Default;
     let mut force_global_language = false; // Default to not forcing global language override
+    let mut output_encoding = OutputEncoding::default();
+
     if let Some(params) = request.parameter.as_ref() {
         for param in params.split(',') {
             let key_val = param.split('=').collect::<Vec<&str>>();
@@ -244,30 +288,50 @@ pub fn parse_request_parameters(
                         };
                         log::debug!("Parameter '{}' found, language set to: {}", param, language);
                     }
+                    key if key.starts_with("enco") => {
+                        match OutputEncoding::from_str(key_val[1]) {
+                            Ok(enc) => {
+                                output_encoding = enc;
+                                log::debug!(
+                                    "Parameter '{}' found, encoding set to: {}",
+                                    param,
+                                    output_encoding
+                                );
+                            }
+                            Err(e) => log::warn!("{}, defaulting to {}", e, output_encoding),
+                        }
+                    }
                     _ => {
                         log::warn!(
-                            "Unrecognized parameter '{}', expected 'format=<value>' or 'output_path=<value>'",
+                            "Unrecognized parameter '{}', expected 'format=<value>', 'output_path=<value>', or 'encoding=<value>'",
                             param
                         );
                     }
                 }
             } else {
                 log::warn!(
-                    "Unrecognized parameter '{}', expected 'format=<value>' or 'output_path=<value>'",
+                    "Unrecognized parameter '{}', expected 'format=<value>', 'output_path=<value>', or 'encoding=<value>'",
                     param
                 );
             }
         }
     } else {
         log::debug!(
-            "No parameters provided, using default output format, language, and path: '{}', '{}' and '{}'",
+            "No parameters provided, using default output format, language, path, and encoding: '{}', '{}', '{}', '{}'",
             output_format,
             language,
-            output_path.to_str().unwrap_or("unknown")
+            output_path.to_str().unwrap_or("unknown"),
+            output_encoding
         );
     }
     // (output_format.to_string(), output_path)
-    (output_format, output_path, language, force_global_language)
+    (
+        output_format,
+        output_path,
+        language,
+        force_global_language,
+        output_encoding,
+    )
 }
 
 /// Simple extractor for the file names to generate from the request.
@@ -455,55 +519,79 @@ mod utils_tests {
     #[test]
     fn test_parse_request_parameters_default() {
         let request = create_mock_request(None, &[]);
-        let (format, path, language, force_language) = parse_request_parameters(&request);
+        let (format, path, language, force_language, encoding) = parse_request_parameters(&request);
         assert_eq!(format, DesiredOutputFormat::Protobuf);
         assert_eq!(path, PathBuf::from("."));
         assert_eq!(language, SupportedLanguage::Default);
         assert!(!force_language);
+        assert_eq!(encoding, OutputEncoding::Binary);
     }
 
     /// Test `parse_request_parameters` with JSON format.
     #[test]
     fn test_parse_request_parameters_json_format() {
         let request = create_mock_request(Some("format=json"), &[]);
-        let (format, path, language, force_language) = parse_request_parameters(&request);
+        let (format, path, language, force_language, encoding) = parse_request_parameters(&request);
         assert_eq!(format, DesiredOutputFormat::Json);
         assert_eq!(path, PathBuf::from("."));
         assert_eq!(language, SupportedLanguage::Default);
         assert!(!force_language);
+        assert_eq!(encoding, OutputEncoding::Binary);
     }
 
     /// Test `parse_request_parameters` with Protobuf format.
     #[test]
     fn test_parse_request_parameters_protobuf_format() {
         let request = create_mock_request(Some("format=protobuf"), &[]);
-        let (format, path, language, force_language) = parse_request_parameters(&request);
+        let (format, path, language, force_language, encoding) = parse_request_parameters(&request);
         assert_eq!(format, DesiredOutputFormat::Protobuf);
         assert_eq!(path, PathBuf::from("."));
         assert_eq!(language, SupportedLanguage::Default);
         assert!(!force_language);
+        assert_eq!(encoding, OutputEncoding::Binary);
     }
 
     /// Test `parse_request_parameters` with a custom output path.
     #[test]
     fn test_parse_request_parameters_output_path() {
         let request = create_mock_request(Some("output_path=./my_output"), &[]);
-        let (format, path, language, force_language) = parse_request_parameters(&request);
+        let (format, path, language, force_language, encoding) = parse_request_parameters(&request);
         assert_eq!(format, DesiredOutputFormat::Protobuf); // Default format
         assert_eq!(path, PathBuf::from("./my_output"));
         assert_eq!(language, SupportedLanguage::Default);
         assert!(!force_language);
+        assert_eq!(encoding, OutputEncoding::Binary);
     }
 
     /// Test `parse_request_parameters` with both format and output path.
     #[test]
     fn test_parse_request_parameters_all_options() {
         let request = create_mock_request(Some("format=json,output_path=/tmp/out"), &[]);
-        let (format, path, language, force_language) = parse_request_parameters(&request);
+        let (format, path, language, force_language, encoding) = parse_request_parameters(&request);
         assert_eq!(format, DesiredOutputFormat::Json);
         assert_eq!(path, PathBuf::from("/tmp/out"));
         assert_eq!(language, SupportedLanguage::Default);
         assert!(!force_language);
+        assert_eq!(encoding, OutputEncoding::Binary);
+    }
+
+    /// Test `parse_request_parameters` with encoding parameter.
+    #[test]
+    fn test_parse_request_parameters_encoding() {
+        // Test Base64
+        let request = create_mock_request(Some("encoding=base64"), &[]);
+        let (_, _, _, _, encoding) = parse_request_parameters(&request);
+        assert_eq!(encoding, OutputEncoding::Base64);
+
+        // Test Binary (explicit)
+        let request = create_mock_request(Some("encoding=binary"), &[]);
+        let (_, _, _, _, encoding) = parse_request_parameters(&request);
+        assert_eq!(encoding, OutputEncoding::Binary);
+
+        // Test Both
+        let request = create_mock_request(Some("encoding=both"), &[]);
+        let (_, _, _, _, encoding) = parse_request_parameters(&request);
+        assert_eq!(encoding, OutputEncoding::Both);
     }
 
     /// Test `parse_request_parameters` with unrecognized parameters.
@@ -511,11 +599,12 @@ mod utils_tests {
     fn test_parse_request_parameters_unrecognized() {
         // Unrecognized parameters should be ignored, and defaults should apply
         let request = create_mock_request(Some("unknown=value,format=json"), &[]);
-        let (format, path, language, force_language) = parse_request_parameters(&request);
+        let (format, path, language, force_language, encoding) = parse_request_parameters(&request);
         assert_eq!(format, DesiredOutputFormat::Json);
         assert_eq!(path, PathBuf::from("."));
         assert_eq!(language, SupportedLanguage::Default);
         assert!(!force_language);
+        assert_eq!(encoding, OutputEncoding::Binary);
     }
 
     /// Test `get_key_files`.

@@ -74,7 +74,7 @@ use std::path::Path;
 use std::str::FromStr;
 use utils::{
     choose_language, find_message_proto, get_key_files, parse_request_parameters, DataType,
-    DesiredOutputFormat, SupportedLanguage,
+    DesiredOutputFormat, OutputEncoding, SupportedLanguage,
 }; // Import Path for file handling // Import locales for fake data generation // Import Lazy for static initialization
 
 #[path = "./gen_protobuf/fake_field.rs"]
@@ -107,7 +107,7 @@ fn main() -> io::Result<()> {
     log::trace!("Full CodeGeneratorRequest received: {:#?}", request);
 
     // Parse the request parameters to get output format and output path, or populate defaults
-    let (output_format, output_path, global_language, force_global_language) =
+    let (output_format, output_path, global_language, force_global_language, output_encoding) =
         parse_request_parameters(&request);
 
     // Get the set of files to generate (explicitly requested by protoc)
@@ -351,23 +351,35 @@ fn main() -> io::Result<()> {
                         "Writing JSON to the following path: {}",
                         generated_file.name.clone().unwrap_or("unknown".to_string())
                     );
+                    response.file.push(generated_file);
                 }
                 DesiredOutputFormat::Protobuf => {
                     for next_message in all_messages {
                         let msg_bytes = next_message.encode_to_vec();
                         generated_file_content.extend_from_slice(&msg_bytes);
                     }
-                    fs::write(&binary_name, &generated_file_content)
-                        .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
-                    log::info!("Writing binary to the following path: {}", binary_name);
-                    let file_content_string =
-                        general_purpose::STANDARD.encode(&generated_file_content);
-                    generated_file.set_content(file_content_string);
+
+                    if output_encoding == OutputEncoding::Binary
+                        || output_encoding == OutputEncoding::Both
+                    {
+                        fs::write(&binary_name, &generated_file_content)
+                            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+                        log::info!("Writing binary to the following path: {}", binary_name);
+                    }
+
+                    if output_encoding == OutputEncoding::Base64
+                        || output_encoding == OutputEncoding::Both
+                    {
+                        let file_content_string =
+                            general_purpose::STANDARD.encode(&generated_file_content);
+                        generated_file.set_content(file_content_string);
+                        response.file.push(generated_file);
+                    }
                 }
             }
-            response.file.push(generated_file);
         }
     }
+
 
     // Encode the CodeGeneratorResponse and write to stdout
     let mut output_buffer = Vec::new();
@@ -440,7 +452,7 @@ fn generate_fake_message_field(
                     // RECURSIVE CALL FOR NESTED MESSAGE
                     if is_list_field {
                         let mut nested_messages = Vec::new();
-                        let num_values = rng.gen_range(min_count..=max_count);
+                        let num_values = rng.random_range(min_count..=max_count);
                         for _ in 0..num_values {
                             let nested_msg = generate_fake_message_field(
                                 &nested_message_descr,
@@ -471,7 +483,7 @@ fn generate_fake_message_field(
                     if is_list_field {
                         // Generate multiple values for list fields
                         let mut repeated_values = Vec::new();
-                        let num_values = rng.gen_range(min_count..=max_count);
+                        let num_values = rng.random_range(min_count..=max_count);
                         for _ in 0..num_values {
                             let fake_value = get_fake_data_output_value(
                                 data_type,
@@ -492,7 +504,7 @@ fn generate_fake_message_field(
                             field_kind,
                         ));
                     } else if field_cardinality == Cardinality::Optional {
-                        let should_generate_value = rng.gen_bool(0.6);
+                        let should_generate_value = rng.random_bool(0.6);
                         if should_generate_value || min_count > 0 {
                             fake_field_value = Some(get_fake_data_output_value(
                                 data_type,
