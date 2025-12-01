@@ -92,6 +92,11 @@ fn main() -> io::Result<()> {
     // Initialize logging for better debugging output
     env_logger::init(); // RUST_LOG=info, debug, or trace for more detail
 
+    // Debugging: Log all arguments
+    for (i, arg) in std::env::args().enumerate() {
+        log::debug!("Arg {}: {}", i, arg);
+    }
+
     // Read the CodeGeneratorRequest from stdin
     let mut buffer = Vec::new();
     io::stdin().read_to_end(&mut buffer)?;
