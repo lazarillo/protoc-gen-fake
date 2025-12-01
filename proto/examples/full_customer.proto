@@ -10,7 +10,10 @@ message Customer {
     // Ensure that the ID is always present, so min_count is 1.
     min_count: 1
   }];
-  string given_name = 2 [(gen_fake.fake_data).data_type = "FirstName"];
+  string given_name = 2 [(gen_fake.fake_data) = {
+    data_type: "FirstName"
+    language: "ZH_TW"
+  }];
   string family_name = 3 [(gen_fake.fake_data) = {
     data_type: "LastName"
     language: "PT_BR"
@@ -37,7 +40,10 @@ message Address {
   string country = 3 [(gen_fake.fake_data).data_type = "CountryName"];
   message Street {
     uint32 number = 1 [(gen_fake.fake_data).data_type = "WholeNumber"];
-    string name = 2 [(gen_fake.fake_data).data_type = "StreetName"];
+    string name = 2 [(gen_fake.fake_data) = {
+      data_type: "StreetName"
+      language: "AR_SA"
+    }];
   }
 }
 
