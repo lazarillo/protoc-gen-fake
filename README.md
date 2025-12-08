@@ -5,7 +5,7 @@
 ## Features
 
 *   **Schema-driven Data Generation:** Generates fake data directly from your `.proto` file definitions.
-*   **Customizable Fake Data:** Use `(gen_fake.fake_data)` options to specify data types (e.g., names, addresses, emails) and constraints.
+*   **Customizable Fake Data:** Use `(gen_fake.fake_data)` options to provide _specific_ data types (e.g., names, addresses, emails), and minimum and maximum count for repeated or optional fields.
 *   **Internationalization (i18n):** Generate fake data in various languages and locales.
 *   **Flexible Output:** Choose between binary or Base64 encoded output, and control output paths.
 
