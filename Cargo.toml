@@ -2,6 +2,13 @@
 name = "protoc-gen-fake"
 version = "0.1.0"
 edition = "2024"
+authors = ["Mike Williamson"]
+description = "A protobuf compiler plugin to generate fake data based on protobuf schema definitions."
+license = "Apache-2.0"
+repository = "https://github.com/mike-williamson/protoc-gen-fake"
+readme = "README.md"
+keywords = ["protobuf", "fake-data", "protoc-plugin", "data-engineering", "synthetic-data"]
+categories = ["development-tools", "command-line-utilities", "development-tools::testing", "encoding"]
 
 [dependencies]
 base64 = "0.22.1"

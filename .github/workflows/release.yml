@@ -1,0 +1,109 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*' # Run on tags like v1.0.0, v0.1.0-rc1
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # Build jobs for different platforms
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          target: x86_64-unknown-linux-gnu
+      - name: Build
+        run: cargo build --release --target x86_64-unknown-linux-gnu
+      - name: Package
+        run: |
+          mkdir staging
+          cp target/x86_64-unknown-linux-gnu/release/protoc-gen-fake staging/protoc-gen-fake-linux-x86_64
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: protoc-gen-fake-linux-x86_64
+          path: staging/protoc-gen-fake-linux-x86_64
+
+  build-macos-intel:
+    runs-on: macos-latest # GitHub Actions provides intel runners
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          target: x86_64-apple-darwin
+      - name: Build
+        run: cargo build --release --target x86_64-apple-darwin
+      - name: Package
+        run: |
+          mkdir staging
+          cp target/x86_64-apple-darwin/release/protoc-gen-fake staging/protoc-gen-fake-darwin-x86_64
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: protoc-gen-fake-darwin-x86_64
+          path: staging/protoc-gen-fake-darwin-x86_64
+
+  build-macos-arm:
+    runs-on: macos-14 # Specifically for Apple Silicon (ARM64)
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          target: aarch64-apple-darwin
+      - name: Build
+        run: cargo build --release --target aarch64-apple-darwin
+      - name: Package
+        run: |
+          mkdir staging
+          cp target/aarch64-apple-darwin/release/protoc-gen-fake staging/protoc-gen-fake-darwin-arm64
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: protoc-gen-fake-darwin-arm64
+          path: staging/protoc-gen-fake-darwin-arm64
+
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          target: x86_64-pc-windows-msvc
+      - name: Build
+        run: cargo build --release --target x86_64-pc-windows-msvc
+      - name: Package
+        run: |
+          mkdir staging
+          cp target/x86_64-pc-windows-msvc/release/protoc-gen-fake.exe staging/protoc-gen-fake-windows-x86_64.exe
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: protoc-gen-fake-windows-x86_64
+          path: staging/protoc-gen-fake-windows-x86_64.exe
+
+  # Release job - runs after all builds are successful
+  release:
+    needs: [build-linux, build-macos-intel, build-macos-arm, build-windows]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # To create a GitHub Release
+    steps:
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Create Release
+        id: create_release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/**

@@ -29,9 +29,49 @@ The fake data it generates is binary data in exactly the same format as defined 
 
 ## Installation
 
-To install `protoc-gen-fake`, you need to build it from source and place the resulting binary in a directory that is included in your system's `$PATH`.
+`protoc-gen-fake` can be installed in several ways, depending on your preferences and development setup.
 
-1.  **Build the plugin in release mode:**
+### From GitHub Releases (Recommended for most users)
+
+The easiest way to get `protoc-gen-fake` is to download the pre-compiled binary for your operating system from the [GitHub Releases page](https://github.com/mike-williamson/protoc-gen-fake/releases).
+
+1.  **Download:** Go to the [Releases page](https://github.com/mike-williamson/protoc-gen-fake/releases) and download the appropriate `.zip` or `.tar.gz` file for your system (e.g., `protoc-gen-fake-darwin-arm64` for macOS Apple Silicon).
+2.  **Extract:** Extract the downloaded archive.
+3.  **Add to PATH:** Move the `protoc-gen-fake` executable to a directory in your system's `$PATH` (e.g., `/usr/local/bin` or `~/.cargo/bin`).
+
+    ```bash
+    # Example for macOS/Linux
+    mv /path/to/downloaded/protoc-gen-fake /usr/local/bin/
+    ```
+
+    Ensure the chosen directory is in your `$PATH`. If not, you might need to add it to your shell's configuration file (e.g., `.bashrc`, `.zshrc`, or `.profile`):
+
+    ```bash
+    export PATH="/usr/local/bin:$PATH"
+    ```
+
+### Via Cargo (For Rust developers)
+
+If you have Rust and Cargo installed, you can install `protoc-gen-fake` directly from [crates.io](https://crates.io/crates/protoc-gen-fake):
+
+```bash
+cargo install protoc-gen-fake
+```
+
+This will compile the plugin from source and place the executable in `~/.cargo/bin/`, which should already be in your `$PATH`.
+
+### From Source
+
+If you prefer to build the plugin yourself:
+
+1.  **Clone the repository:**
+
+    ```bash
+    git clone https://github.com/mike-williamson/protoc-gen-fake.git
+    cd protoc-gen-fake
+    ```
+
+2.  **Build in release mode:**
 
     ```bash
     cargo build --release
@@ -39,21 +79,23 @@ To install `protoc-gen-fake`, you need to build it from source and place the res
 
     This will create an executable named `protoc-gen-fake` in the `target/release/` directory.
 
-2.  **Copy the executable to your `$PATH`:**
+3.  **Copy the executable to your `$PATH`:**
 
-    You can copy the binary to a directory that is already in your `$PATH`, such as `~/.cargo/bin/`.
+    You can copy the binary to a directory that is already in your `$PATH`, such as `~/.cargo/bin/` (or `/usr/local/bin`):
 
     ```bash
     cp target/release/protoc-gen-fake ~/.cargo/bin/
     ```
 
-    Ensure that `~/.cargo/bin/` is in your `$PATH`. If not, you might need to add it to your shell's configuration file (e.g., `.bashrc`, `.zshrc`, or `.profile`):
+### Via Homebrew (For macOS & Linux users - Coming Soon)
 
-    ```bash
-    export PATH="$HOME/.cargo/bin:$PATH"
-    ```
+A Homebrew formula will be available soon for easy installation on macOS and Linux:
 
-    After this, you should be able to invoke `protoc-gen-fake` directly via `protoc`.
+```bash
+brew install protoc-gen-fake # Placeholder command
+```
+
+Once installed, you should be able to invoke `protoc-gen-fake` directly via `protoc`.
 
 ## Usage
 
