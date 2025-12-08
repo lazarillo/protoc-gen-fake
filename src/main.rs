@@ -3,7 +3,7 @@
 //! `protoc-gen-fake` is a custom plugin for `protoc` that uses annotation on the proto file schema
 //! to generate a file with fake data well-aligned with the expected data types of the fields.
 //!
-//! It can generate fake data in either JSON or binary format, depending on the request parameters.
+//! It generates fake data in binary format.
 //!
 //! ## Features
 //!
@@ -11,7 +11,7 @@
 //!   leveraging the Rust `fake` crate: https://docs.rs/fake/latest/fake/index.html
 //! - Generates fake data in many different languages and regions, defaulting to English.
 //!   All of the languages and types of fake data supported are listed at: <PROVIDE THE GITHUB URL HERE>
-//! - Supports both JSON and binary output formats, with the default being binary.
+//! - Supports binary output format, with Base64 encoding for `protoc` compatibility.
 //! - Allows owners of the proto files to specify the type of fake data to generate for each field.
 //!
 //! ## Usage
@@ -38,9 +38,6 @@
 //! - `output_path`: The path where the generated protobuf binary file(s) will be written.
 //!                  This is passed as `--fake_opt output_path=<path>`.
 //!                  Default: Current path (with respect to where `protoc` is run).
-//! - `format`: The format of the output file(s). Can be either `json` or `protobuf`.
-//!             This is passed as `--fake_opt format=<format>`.
-//!             Default: `protobuf`.
 //! - `language`: The language to use globally for generating all fake data. The language can
 //!               also be specified on a per-field basis using the `fake_data` field option.
 //!               The field-set language will override the global language, unless the
@@ -65,7 +62,6 @@ use protobuf::plugin::{
 };
 use protobuf::Message as PbMessage;
 use rand::Rng;
-use serde_json::{to_vec_pretty, Map as JsonMap, Value as JsonValue}; // Import serde_json for JSON handling
 use std::cmp::max;
 use std::fs;
 pub mod utils; // Import utility functions for parsing request parameters
@@ -152,21 +148,31 @@ fn main() -> io::Result<()> {
                 .file_stem()
                 .and_then(|s| s.to_str())
                 .unwrap_or_default();
-            let output_name = match output_format {
-                DesiredOutputFormat::Json => format!("{}.json", file_stem),
-                DesiredOutputFormat::Protobuf => format!("{}.b64", file_stem),
-            };
-            log::info!("    output file: {}", output_name);
-            let mut binary_name = "output.bin".to_string();
-            if output_format == DesiredOutputFormat::Protobuf {
-                let binary_path = Path::new(&output_path)
-                    .join(file_stem)
-                    .with_extension("bin");
-                binary_name = binary_path.to_string_lossy().to_string();
-                log::info!("    binary path: {}", binary_name);
+            let output_name = format!("{}.b64", file_stem);
+
+            // Determine the actual binary file path for fs::write
+            let binary_name: String;
+            let user_supplied_output_path_str = output_path.to_string_lossy();
+
+            if user_supplied_output_path_str == "." {
+                // If output_path is the default ".", we output to the current directory
+                // with the proto's file stem and a .bin extension.
+                binary_name = Path::new(file_stem).with_extension("bin").to_string_lossy().to_string();
+            } else if user_supplied_output_path_str.ends_with(".bin") {
+                // If the user provided a full path ending in .bin, use it as is.
+                binary_name = user_supplied_output_path_str.to_string();
+            } else {
+                // If the user provided a path that doesn't end in .bin, treat it as a directory
+                // and append the proto's file stem with a .bin extension.
+                binary_name = Path::new(user_supplied_output_path_str.as_ref())
+                                .join(file_stem)
+                                .with_extension("bin")
+                                .to_string_lossy()
+                                .to_string();
             }
+            log::debug!("    output file (Base64): {}", output_name); // For protoc response
+            log::warn!("    binary output path: {}", binary_name); // For actual file write
             let mut all_messages: Vec<DynamicMessage> = Vec::new();
-            let all_json_messages: Vec<JsonMap<String, JsonValue>> = Vec::new();
             let runtime_file_descriptor = runtime_descriptor_pool
                 .get_file_by_name(filename)
                 .ok_or_else(|| {
@@ -285,16 +291,14 @@ fn main() -> io::Result<()> {
                                         let mut repeated_values = Vec::new();
                                         let num_values = rng.random_range(min_count..=max_count);
                                         for _ in 0..num_values {
-                                            if let DataType::Protobuf(proto_value) =
+                                            let DataType::Protobuf(proto_value) =
                                                 get_fake_data_output_value(
                                                     data_type,
                                                     language,
                                                     &output_format,
                                                     field_kind,
-                                                )
-                                            {
-                                                repeated_values.push(proto_value);
-                                            }
+                                                );
+                                            repeated_values.push(proto_value);
                                         }
                                         fake_field_value =
                                             Some(DataType::Protobuf(Value::List(repeated_values)));
@@ -324,9 +328,6 @@ fn main() -> io::Result<()> {
                         }
                     }
                     match output_format {
-                        DesiredOutputFormat::Json => {
-                            // all_json_messages.push(json_message);
-                        }
                         _ => {
                             all_messages.push(message);
                         }
@@ -337,27 +338,6 @@ fn main() -> io::Result<()> {
             let mut generated_file = protobuf::plugin::code_generator_response::File::new();
             generated_file.set_name(output_name);
             match output_format {
-                DesiredOutputFormat::Json => {
-                    generated_file_content = to_vec_pretty(&all_json_messages).map_err(|e| {
-                        io::Error::new(
-                            io::ErrorKind::Other,
-                            format!("Failed to serialize to JSON: {}", e),
-                        )
-                    })?;
-                    let stringified_content =
-                        String::from_utf8(generated_file_content).map_err(|e| {
-                            io::Error::new(
-                                io::ErrorKind::InvalidData,
-                                format!("Failed to convert UTF-8 bytes to String: {}", e),
-                            )
-                        })?;
-                    generated_file.set_content(stringified_content);
-                    log::info!(
-                        "Writing JSON to the following path: {}",
-                        generated_file.name.clone().unwrap_or("unknown".to_string())
-                    );
-                    response.file.push(generated_file);
-                }
                 DesiredOutputFormat::Protobuf => {
                     for next_message in all_messages {
                         let msg_bytes = next_message.encode_to_vec();
@@ -496,9 +476,8 @@ fn generate_fake_message_field(
                                 output_format,
                                 field_kind,
                             );
-                            if let DataType::Protobuf(proto_value) = fake_value {
-                                repeated_values.push(proto_value);
-                            }
+                            let DataType::Protobuf(proto_value) = fake_value;
+                            repeated_values.push(proto_value);
                         }
                         fake_field_value = Some(DataType::Protobuf(Value::List(repeated_values)));
                     } else if field_cardinality == Cardinality::Required {

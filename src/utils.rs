@@ -12,7 +12,6 @@ use prost_types::{
 use protobuf::plugin::CodeGeneratorRequest;
 use protobuf::{descriptor::DescriptorProto, descriptor::FileDescriptorProto, Message as _};
 use rand::prelude::IndexedRandom;
-use serde_json::{Map as JsonMap, Value as JsonValue};
 use std::collections::HashSet;
 use std::io::{self};
 use std::path::PathBuf;
@@ -54,27 +53,24 @@ fn find_nested_message<'a>(
 /// Allow for representation of either JSON or Protobuf output in a single object.
 #[derive(Debug)]
 pub enum DataType {
-    Json(JsonValue),
     Protobuf(Value),
 }
 
+
 pub enum DataMsg {
-    JsonMsg(JsonMap<String, JsonValue>),
     ProtoMsg(DynamicMessage),
 }
 
-/// Whether the output format is Protobuf or JSON.
+/// Whether the output format is Protobuf.
 #[derive(Debug, PartialEq)]
 pub enum DesiredOutputFormat {
     Protobuf,
-    Json,
 }
 
 impl fmt::Display for DesiredOutputFormat {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             DesiredOutputFormat::Protobuf => write!(f, "Protobuf"),
-            DesiredOutputFormat::Json => write!(f, "JSON"),
         }
     }
 }
@@ -241,14 +237,14 @@ pub fn parse_request_parameters(
                                 output_format
                             );
                         }
-                        val if val.starts_with("json") => {
-                            output_format = DesiredOutputFormat::Json;
-                            log::debug!(
-                                "Parameter '{}' found, output format set to: {}",
-                                param,
-                                output_format
-                            );
-                        }
+                        // val if val.starts_with("json") => {
+                        //     output_format = DesiredOutputFormat::Json;
+                        //     log::debug!(
+                        //         "Parameter '{}' found, output format set to: {}",
+                        //         param,
+                        //         output_format
+                        //     );
+                        // }
                         _ => {
                             log::warn!(
                                 "Unrecognized output format '{}', defaulting to '{}'",
@@ -413,27 +409,27 @@ pub fn get_fake_data_output_value(
 ) -> DataType {
     let possible_value = get_fake_data(data_type, language);
     match output_format {
-        DesiredOutputFormat::Json => {
-            // Note: this match is only needed for better logging information.
-            match &possible_value {
-                Some(fake_val) => {
-                    log::info!(
-                        "    Fake data type '{}' in '{}': '{}'",
-                        data_type,
-                        language,
-                        &fake_val.to_string()
-                    );
-                }
-                None => {
-                    log::warn!(
-                        "    No fake data found for type '{}' in '{}'",
-                        data_type,
-                        language
-                    );
-                }
-            }
-            DataType::Json(possible_value.unwrap_or_default().into_json_value())
-        }
+        // DesiredOutputFormat::Json => {
+        //     // Note: this match is only needed for better logging information.
+        //     match &possible_value {
+        //         Some(fake_val) => {
+        //             log::info!(
+        //                 "    Fake data type '{}' in '{}': '{}'",
+        //                 data_type,
+        //                 language,
+        //                 &fake_val.to_string()
+        //             );
+        //         }
+        //         None => {
+        //             log::warn!(
+        //                 "    No fake data found for type '{}' in '{}'",
+        //                 data_type,
+        //                 language
+        //             );
+        //         }
+        //     }
+        //     DataType::Json(possible_value.unwrap_or_default().into_json_value())
+        // }
         _ => {
             if let ProstFieldKind::Enum(enum_descr) = field_kind {
                 if possible_value.is_none() {
@@ -527,17 +523,17 @@ mod utils_tests {
         assert_eq!(encoding, OutputEncoding::Binary);
     }
 
-    /// Test `parse_request_parameters` with JSON format.
-    #[test]
-    fn test_parse_request_parameters_json_format() {
-        let request = create_mock_request(Some("format=json"), &[]);
-        let (format, path, language, force_language, encoding) = parse_request_parameters(&request);
-        assert_eq!(format, DesiredOutputFormat::Json);
-        assert_eq!(path, PathBuf::from("."));
-        assert_eq!(language, SupportedLanguage::Default);
-        assert!(!force_language);
-        assert_eq!(encoding, OutputEncoding::Binary);
-    }
+    // /// Test `parse_request_parameters` with JSON format.
+    // #[test]
+    // fn test_parse_request_parameters_json_format() {
+    //     let request = create_mock_request(Some("format=json"), &[]);
+    //     let (format, path, language, force_language, encoding) = parse_request_parameters(&request);
+    //     assert_eq!(format, DesiredOutputFormat::Json);
+    //     assert_eq!(path, PathBuf::from("."));
+    //     assert_eq!(language, SupportedLanguage::Default);
+    //     assert!(!force_language);
+    //     assert_eq!(encoding, OutputEncoding::Binary);
+    // }
 
     /// Test `parse_request_parameters` with Protobuf format.
     #[test]
@@ -568,7 +564,9 @@ mod utils_tests {
     fn test_parse_request_parameters_all_options() {
         let request = create_mock_request(Some("format=json,output_path=/tmp/out"), &[]);
         let (format, path, language, force_language, encoding) = parse_request_parameters(&request);
-        assert_eq!(format, DesiredOutputFormat::Json);
+        // assert_eq!(format, DesiredOutputFormat::Json);
+        // Since JSON is no longer supported, it falls back to default Protobuf
+        assert_eq!(format, DesiredOutputFormat::Protobuf); 
         assert_eq!(path, PathBuf::from("/tmp/out"));
         assert_eq!(language, SupportedLanguage::Default);
         assert!(!force_language);
@@ -600,7 +598,9 @@ mod utils_tests {
         // Unrecognized parameters should be ignored, and defaults should apply
         let request = create_mock_request(Some("unknown=value,format=json"), &[]);
         let (format, path, language, force_language, encoding) = parse_request_parameters(&request);
-        assert_eq!(format, DesiredOutputFormat::Json);
+        // assert_eq!(format, DesiredOutputFormat::Json);
+         // Since JSON is no longer supported, it falls back to default Protobuf
+        assert_eq!(format, DesiredOutputFormat::Protobuf);
         assert_eq!(path, PathBuf::from("."));
         assert_eq!(language, SupportedLanguage::Default);
         assert!(!force_language);
@@ -617,23 +617,23 @@ mod utils_tests {
         assert_eq!(key_files, expected_files);
     }
 
-    /// Test `get_fake_data_output_value` for JSON output.
-    #[test]
-    fn test_get_fake_data_output_value_json() {
-        let output = get_fake_data_output_value(
-            "FirstName",
-            &SupportedLanguage::Default,
-            &DesiredOutputFormat::Json,
-            &ProstFieldKind::String,
-        );
-        match output {
-            DataType::Json(value) => {
-                assert!(value.is_string());
-                assert!(!value.as_str().unwrap().is_empty());
-            }
-            _ => panic!("Expected Json output"),
-        }
-    }
+    // /// Test `get_fake_data_output_value` for JSON output.
+    // #[test]
+    // fn test_get_fake_data_output_value_json() {
+    //     let output = get_fake_data_output_value(
+    //         "FirstName",
+    //         &SupportedLanguage::Default,
+    //         &DesiredOutputFormat::Json,
+    //         &ProstFieldKind::String,
+    //     );
+    //     match output {
+    //         DataType::Json(value) => {
+    //             assert!(value.is_string());
+    //             assert!(!value.as_str().unwrap().is_empty());
+    //         }
+    //         _ => panic!("Expected Json output"),
+    //     }
+    // }
 
     /// Test `get_fake_data_output_value` for Protobuf output.
     #[test]
@@ -654,29 +654,29 @@ mod utils_tests {
         }
     }
 
-    /// Test `get_fake_data_output_value` with a list type for JSON.
-    #[test]
-    fn test_get_fake_data_output_value_json_list() {
-        let output = get_fake_data_output_value(
-            "Words",
-            &SupportedLanguage::Default,
-            &DesiredOutputFormat::Json,
-            &ProstFieldKind::String,
-        );
-        match output {
-            DataType::Json(value) => {
-                assert!(value.is_array());
-                let arr = value.as_array().unwrap();
-                // assert!(!arr.is_empty());
-                assert!(arr.len() <= 10);
-                for item in arr {
-                    assert!(item.is_string());
-                    assert!(!item.as_str().unwrap().is_empty());
-                }
-            }
-            _ => panic!("Expected Json Array output"),
-        }
-    }
+    // /// Test `get_fake_data_output_value` with a list type for JSON.
+    // #[test]
+    // fn test_get_fake_data_output_value_json_list() {
+    //     let output = get_fake_data_output_value(
+    //         "Words",
+    //         &SupportedLanguage::Default,
+    //         &DesiredOutputFormat::Json,
+    //         &ProstFieldKind::String,
+    //     );
+    //     match output {
+    //         DataType::Json(value) => {
+    //             assert!(value.is_array());
+    //             let arr = value.as_array().unwrap();
+    //             // assert!(!arr.is_empty());
+    //             assert!(arr.len() <= 10);
+    //             for item in arr {
+    //                 assert!(item.is_string());
+    //                 assert!(!item.as_str().unwrap().is_empty());
+    //             }
+    //         }
+    //         _ => panic!("Expected Json Array output"),
+    //     }
+    // }
 
     /// Test `get_fake_data_output_value` with a list type for Protobuf.
     #[test]

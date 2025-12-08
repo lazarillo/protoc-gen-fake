@@ -1,6 +1,9 @@
 # protoc-gen-fake: Protocol Buffer Fake Data Generator
 
-`protoc-gen-fake` is a `protoc` plugin that generates fake data based on your Protocol Buffer schema definitions and custom annotations. It helps developers quickly create realistic mock data for testing, development, and demonstrations.
+`protoc-gen-fake` is a `protoc` plugin that generates fake data based on your Protocol Buffer schema definitions and custom annotations.
+
+The fake data it generates is binary data in exactly the same format as defined by that schema. It helps developers quickly create realistic mock data at scale for testing, development, and demonstrations.
+
 
 ## Features
 
