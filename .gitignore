@@ -24,10 +24,5 @@ src/gen/
 #.idea/
 
 # Generated Python protobuf files and cache
-examples/full_customer_pb2.py
-examples/__pycache__/
-gen_fake/fake_field_pb2.py
-gen_fake/__pycache__/
-
-# Temporary chat log
-chat_2025-12-01.txt
+**/__pycache__/**
+**/*_pb2.py

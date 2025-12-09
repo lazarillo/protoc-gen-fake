@@ -87,15 +87,16 @@ If you prefer to build the plugin yourself:
     cp target/release/protoc-gen-fake ~/.cargo/bin/
     ```
 
-### Via Homebrew (For macOS & Linux users - Coming Soon)
+### Via Homebrew (For macOS & Linux users)
 
-A Homebrew formula will be available soon for easy installation on macOS and Linux:
+You can install `protoc-gen-fake` directly from this repository by tapping it:
 
 ```bash
-brew install protoc-gen-fake # Placeholder command
+brew tap lazarillo/protoc-gen-fake https://github.com/lazarillo/protoc-gen-fake
+brew install protoc-gen-fake
 ```
 
-Once installed, you should be able to invoke `protoc-gen-fake` directly via `protoc`.
+Once installed, you can invoke `protoc-gen-fake` directly via `protoc`.
 
 ## Usage
 
