@@ -16,6 +16,7 @@ jobs:
       - uses: googleapis/release-please-action@v4
         with:
           # These are defaults, but explicit is good
+          token: ${{ secrets.RELEASE_PLEASE_PERSONAL_ACCESS_TOKEN }}
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
           target-branch: ${{ github.ref_name }}
