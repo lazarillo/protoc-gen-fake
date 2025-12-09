@@ -3,7 +3,7 @@ name: Release
 on:
   push:
     tags:
-      - 'v*' # Run on tags like v1.0.0, v0.1.0-rc1
+      - 'protoc-gen-fake-v*' # Run on tags like protoc-gen-fake-v1.0.0
 
 env:
   CARGO_TERM_COLOR: always
