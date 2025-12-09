@@ -2,6 +2,11 @@ name: Release
 
 on:
   workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Tag name to release (e.g. protoc-gen-fake-v0.2.1)'
+        required: true
+        type: string
   push:
     tags:
       - 'protoc-gen-fake-v*' # Run on tags like protoc-gen-fake-v1.0.0
@@ -15,6 +20,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag_name || github.ref_name }}
       - name: Install Protoc
         uses: arduino/setup-protoc@v3
         with:
@@ -39,6 +46,8 @@ jobs:
     runs-on: macos-latest # GitHub Actions provides intel runners
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag_name || github.ref_name }}
       - name: Install Protoc
         uses: arduino/setup-protoc@v3
         with:
@@ -63,6 +72,8 @@ jobs:
     runs-on: macos-14 # Specifically for Apple Silicon (ARM64)
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag_name || github.ref_name }}
       - name: Install Protoc
         uses: arduino/setup-protoc@v3
         with:
@@ -87,6 +98,8 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag_name || github.ref_name }}
       - name: Install Protoc
         uses: arduino/setup-protoc@v3
         with:
@@ -123,4 +136,5 @@ jobs:
         id: create_release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ inputs.tag_name || github.ref_name }}
           files: artifacts/**
