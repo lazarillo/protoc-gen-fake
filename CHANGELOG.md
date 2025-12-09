@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.2](https://github.com/lazarillo/protoc-gen-fake/compare/protoc-gen-fake-v0.2.1...protoc-gen-fake-v0.2.2) (2025-12-09)
+
+
+### Bug Fixes
+
+* add ci cd workflow dispatch fix. ([#3](https://github.com/lazarillo/protoc-gen-fake/issues/3)) ([bcd599b](https://github.com/lazarillo/protoc-gen-fake/commit/bcd599b1336aa19cdb955659075d677fe0565e00))
+
 ## [0.2.1](https://github.com/lazarillo/protoc-gen-fake/compare/protoc-gen-fake-v0.2.0...protoc-gen-fake-v0.2.1) (2025-12-09)
 
 
