@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.1](https://github.com/lazarillo/protoc-gen-fake/compare/protoc-gen-fake-v0.3.0...protoc-gen-fake-v0.3.1) (2025-12-10)
+
+
+### Bug Fixes
+
+* use dynamic CARGO_PKG_VERSION for CLI version output ([#8](https://github.com/lazarillo/protoc-gen-fake/issues/8)) ([9b9166d](https://github.com/lazarillo/protoc-gen-fake/commit/9b9166d3cc2a83360e40f3ba71654435b9af36eb))
+
 ## [0.3.0](https://github.com/lazarillo/protoc-gen-fake/compare/protoc-gen-fake-v0.2.2...protoc-gen-fake-v0.3.0) (2025-12-10)
 
 
