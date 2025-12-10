@@ -100,6 +100,18 @@ Once installed, you can invoke `protoc-gen-fake` directly via `protoc`.
 
 ## Usage
 
+### CLI Utility Flags
+
+While `protoc-gen-fake` is primarily used as a plugin, the executable also supports standard CLI flags for version checking and help:
+
+*   `--version` / `-V`: Prints the current version of the plugin.
+*   `--help` / `-h`: Prints usage information.
+
+```bash
+protoc-gen-fake --version
+protoc-gen-fake --help
+```
+
 ### Direct `protoc` Calls
 
 When using `protoc-gen-fake` directly with `protoc`, you need to specify the output directory for the generated fake data. For binary output, `protoc` does not pass the output directory to the plugin, so you must provide it explicitly using the `--fake_opt output_path` parameter.
