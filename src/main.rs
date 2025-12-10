@@ -88,6 +88,24 @@ fn main() -> io::Result<()> {
     // Initialize logging for better debugging output
     env_logger::init(); // RUST_LOG=info, debug, or trace for more detail
 
+    // Handle command line arguments like --version or --help
+    for arg in std::env::args() {
+        match arg.as_str() {
+            "--version" | "-V" => {
+                println!("protoc-gen-fake 0.2.2");
+                return Ok(());
+            }
+            "--help" | "-h" => {
+                println!("protoc-gen-fake: Protocol Buffer Fake Data Generator");
+                println!("Usage: protoc --plugin=protoc-gen-fake=<path_to_plugin> --fake_out=. --fake_opt=<options> -I <proto_path> <proto_file>");
+                println!("       Or: protoc-gen-fake [--version | -V] [--help | -h]");
+                println!("\nFor detailed usage with protoc, see the project README.");
+                return Ok(());
+            }
+            _ => {}
+        }
+    }
+
     // Debugging: Log all arguments
     for (i, arg) in std::env::args().enumerate() {
         log::debug!("Arg {}: {}", i, arg);
