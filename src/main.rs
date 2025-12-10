@@ -92,7 +92,7 @@ fn main() -> io::Result<()> {
     for arg in std::env::args() {
         match arg.as_str() {
             "--version" | "-V" => {
-                println!("protoc-gen-fake 0.2.2");
+                println!("protoc-gen-fake {}", env!("CARGO_PKG_VERSION"));
                 return Ok(());
             }
             "--help" | "-h" => {
