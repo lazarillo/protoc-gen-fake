@@ -11,6 +11,7 @@ The fake data it generates is binary data in exactly the same format as defined 
 *   **Customizable Fake Data:** Use `(gen_fake.fake_data)` options to provide _specific_ data types (e.g., names, addresses, emails), and minimum and maximum count for repeated or optional fields.
 *   **Internationalization (i18n):** Generate fake data in various languages and locales.
 *   **Flexible Output:** Choose between binary or Base64 encoded output, and control output paths.
+    (Note: Base64 encoding provides compatibility with `protoc`'s string-based output mechanism, but for most use cases, direct binary file output (configured via `--fake_opt output_path`) is preferred. Base64 support may be re-evaluated for future versions if its utility does not justify the added complexity.)
 
 ## Table of Contents
 
