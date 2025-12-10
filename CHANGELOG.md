@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.0](https://github.com/lazarillo/protoc-gen-fake/compare/protoc-gen-fake-v0.2.2...protoc-gen-fake-v0.3.0) (2025-12-10)
+
+
+### Features
+
+* add flag to check for version or help ([#6](https://github.com/lazarillo/protoc-gen-fake/issues/6)) ([cc0f258](https://github.com/lazarillo/protoc-gen-fake/commit/cc0f25846cc35adc94ca4a53076ff75630a65386))
+
 ## [0.2.2](https://github.com/lazarillo/protoc-gen-fake/compare/protoc-gen-fake-v0.2.1...protoc-gen-fake-v0.2.2) (2025-12-09)
 
 
