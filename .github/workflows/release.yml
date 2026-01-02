@@ -15,8 +15,22 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Install Protoc
+      uses: arduino/setup-protoc@v3
+      with:
+        repo-token: ${{ secrets.GITHUB_TOKEN }}
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+    - name: Run tests
+      run: cargo test --verbose
+
   # Build jobs for different platforms
   build-linux:
+    needs: test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -43,6 +57,7 @@ jobs:
           path: staging/protoc-gen-fake-linux-x86_64
 
   build-macos-intel:
+    needs: test
     runs-on: macos-latest # GitHub Actions provides intel runners
     steps:
       - uses: actions/checkout@v4
@@ -69,6 +84,7 @@ jobs:
           path: staging/protoc-gen-fake-darwin-x86_64
 
   build-macos-arm:
+    needs: test
     runs-on: macos-14 # Specifically for Apple Silicon (ARM64)
     steps:
       - uses: actions/checkout@v4
@@ -95,6 +111,7 @@ jobs:
           path: staging/protoc-gen-fake-darwin-arm64
 
   build-windows:
+    needs: test
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4

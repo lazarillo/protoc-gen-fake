@@ -233,8 +233,6 @@ fn main() -> io::Result<()> {
                     message_processed = true;
                     log::debug!(" Message: {}", message_name);
                     let mut message = DynamicMessage::new(message_descr.clone());
-                    // TODO: The JSON output logic is broken for nested messages and needs to be updated.
-                    // let mut json_message: JsonMap<String, JsonValue> = JsonMap::new();
                     for field_descr in message_descr.fields() {
                         let field_name = field_descr.name();
                         let field_kind = &field_descr.kind();

@@ -251,7 +251,7 @@ func main() {
     ```proto
     message MyMessage {
       option (gen_fake.fake_msg).include = true;
-      string id = 1 [(gen_fake.fake_data).uuid = true];
+      string id = 1 [(gen_fake.fake_data).data_type = "UUID"];
     }
     ```
 
@@ -275,8 +275,8 @@ These options are applied to individual fields within a message to control the t
 
     ```proto
     message User {
-      string email = 1 [(gen_fake.fake_data).email = true];
-      string id = 2 [(gen_fake.fake_data).uuid = true];
+      string email = 1 [(gen_fake.fake_data).data_type = "SafeEmail"];
+      string id = 2 [(gen_fake.fake_data).data_type = "UUID"];
     }
     ```
 
@@ -295,12 +295,12 @@ These options are applied to individual fields within a message to control the t
 
     ```proto
     message Address {
-      string street = 1 [(gen_fake.fake_data).street_name = true];
-      string city = 2 [(gen_fake.fake_data).city = true];
+      string street = 1 [(gen_fake.fake_data).data_type = "StreetName"];
+      string city = 2 [(gen_fake.fake_data).data_type = "CityName"];
     }
 
     message Customer {
-      string name = 1 [(gen_fake.fake_data).full_name = true];
+      string name = 1 [(gen_fake.fake_data).data_type = "Name"];
       Address home_address = 2 [(gen_fake.fake_data) = {}]; // Generates a fake Address
     }
     ```
@@ -313,8 +313,8 @@ These options are applied to individual fields within a message to control the t
 
 ```proto
 message UserProfile {
-  string given_name = 1 [(gen_fake.fake_data).given_name = true, (gen_fake.fake_data).language = "ZH_TW"];
-  string address_street = 2 [(gen_fake.fake_data).street_name = true, (gen_fake.fake_data).language = "AR_SA"];
+  string given_name = 1 [(gen_fake.fake_data).data_type = "FirstName", (gen_fake.fake_data).language = "ZH_TW"];
+  string address_street = 2 [(gen_fake.fake_data).data_type = "StreetName", (gen_fake.fake_data).language = "AR_SA"];
 }
 ```
 
