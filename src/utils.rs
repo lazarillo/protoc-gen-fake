@@ -2,15 +2,10 @@
 
 use core::fmt;
 use prost::Message as _;
-use prost_reflect::{
-    DescriptorPool, DynamicMessage, Kind as ProstFieldKind, Value,
-};
-use prost_types::{
-    FileDescriptorProto as ProstFileDescriptor,
-    FileDescriptorSet,
-};
+use prost_reflect::{DescriptorPool, DynamicMessage, Kind as ProstFieldKind, Value};
+use prost_types::{FileDescriptorProto as ProstFileDescriptor, FileDescriptorSet};
 use protobuf::plugin::CodeGeneratorRequest;
-use protobuf::{descriptor::DescriptorProto, descriptor::FileDescriptorProto, Message as _};
+use protobuf::{Message as _, descriptor::DescriptorProto, descriptor::FileDescriptorProto};
 use rand::prelude::IndexedRandom;
 use std::collections::HashSet;
 use std::io::{self};
@@ -55,7 +50,6 @@ fn find_nested_message<'a>(
 pub enum DataType {
     Protobuf(Value),
 }
-
 
 pub enum DataMsg {
     ProtoMsg(DynamicMessage),
@@ -217,7 +211,7 @@ pub fn parse_request_parameters(
 ) {
     let mut output_format = DesiredOutputFormat::Protobuf; // Default output format
     let mut output_path = PathBuf::from("."); // Default output path
-                                              // No overriding default language, let the fields decide language
+    // No overriding default language, let the fields decide language
     let mut language = SupportedLanguage::Default;
     let mut force_global_language = false; // Default to not forcing global language override
     let mut output_encoding = OutputEncoding::default();
@@ -284,19 +278,17 @@ pub fn parse_request_parameters(
                         };
                         log::debug!("Parameter '{}' found, language set to: {}", param, language);
                     }
-                    key if key.starts_with("enco") => {
-                        match OutputEncoding::from_str(key_val[1]) {
-                            Ok(enc) => {
-                                output_encoding = enc;
-                                log::debug!(
-                                    "Parameter '{}' found, encoding set to: {}",
-                                    param,
-                                    output_encoding
-                                );
-                            }
-                            Err(e) => log::warn!("{}, defaulting to {}", e, output_encoding),
+                    key if key.starts_with("enco") => match OutputEncoding::from_str(key_val[1]) {
+                        Ok(enc) => {
+                            output_encoding = enc;
+                            log::debug!(
+                                "Parameter '{}' found, encoding set to: {}",
+                                param,
+                                output_encoding
+                            );
                         }
-                    }
+                        Err(e) => log::warn!("{}, defaulting to {}", e, output_encoding),
+                    },
                     _ => {
                         log::warn!(
                             "Unrecognized parameter '{}', expected 'format=<value>', 'output_path=<value>', or 'encoding=<value>'",
@@ -409,7 +401,6 @@ pub fn get_fake_data_output_value(
 ) -> DataType {
     let possible_value = get_fake_data(data_type, language);
     match output_format {
-
         _ => {
             if let ProstFieldKind::Enum(enum_descr) = field_kind {
                 log::info!("Processing Enum: {}", enum_descr.full_name());
@@ -425,20 +416,27 @@ pub fn get_fake_data_output_value(
                         );
                         return DataType::Protobuf(Value::EnumNumber(random_value.number()));
                     } else {
-                         // If no non-zero values, check if 0 is valid
-                         if let Some(_zero_value) = enum_descr.values().find(|v| v.number() == 0) {
-                             log::debug!("    Only value 0 found for enum '{}'.", enum_descr.full_name());
-                             return DataType::Protobuf(Value::EnumNumber(0));
-                         } else if let Some(first_value) = enum_descr.values().next() {
-                             // If 0 is not valid, use the first available value
-                             log::warn!("    Value 0 not found for enum '{}'. Defaulting to first value '{}' ({})", 
-                                 enum_descr.full_name(), first_value.name(), first_value.number());
-                             return DataType::Protobuf(Value::EnumNumber(first_value.number()));
-                         } else {
-                             // This should be impossible for a valid enum
-                             log::error!("    Enum '{}' has no values!", enum_descr.full_name());
-                             return DataType::Protobuf(Value::EnumNumber(0));
-                         }
+                        // If no non-zero values, check if 0 is valid
+                        if let Some(_zero_value) = enum_descr.values().find(|v| v.number() == 0) {
+                            log::debug!(
+                                "    Only value 0 found for enum '{}'.",
+                                enum_descr.full_name()
+                            );
+                            return DataType::Protobuf(Value::EnumNumber(0));
+                        } else if let Some(first_value) = enum_descr.values().next() {
+                            // If 0 is not valid, use the first available value
+                            log::warn!(
+                                "    Value 0 not found for enum '{}'. Defaulting to first value '{}' ({})",
+                                enum_descr.full_name(),
+                                first_value.name(),
+                                first_value.number()
+                            );
+                            return DataType::Protobuf(Value::EnumNumber(first_value.number()));
+                        } else {
+                            // This should be impossible for a valid enum
+                            log::error!("    Enum '{}' has no values!", enum_descr.full_name());
+                            return DataType::Protobuf(Value::EnumNumber(0));
+                        }
                     }
                 }
             }
@@ -519,8 +517,6 @@ mod utils_tests {
         assert_eq!(encoding, OutputEncoding::Binary);
     }
 
-
-
     /// Test `parse_request_parameters` with Protobuf format.
     #[test]
     fn test_parse_request_parameters_protobuf_format() {
@@ -552,7 +548,7 @@ mod utils_tests {
         let (format, path, language, force_language, encoding) = parse_request_parameters(&request);
         // assert_eq!(format, DesiredOutputFormat::Json);
         // Since JSON is no longer supported, it falls back to default Protobuf
-        assert_eq!(format, DesiredOutputFormat::Protobuf); 
+        assert_eq!(format, DesiredOutputFormat::Protobuf);
         assert_eq!(path, PathBuf::from("/tmp/out"));
         assert_eq!(language, SupportedLanguage::Default);
         assert!(!force_language);
@@ -585,7 +581,7 @@ mod utils_tests {
         let request = create_mock_request(Some("unknown=value,format=json"), &[]);
         let (format, path, language, force_language, encoding) = parse_request_parameters(&request);
         // assert_eq!(format, DesiredOutputFormat::Json);
-         // Since JSON is no longer supported, it falls back to default Protobuf
+        // Since JSON is no longer supported, it falls back to default Protobuf
         assert_eq!(format, DesiredOutputFormat::Protobuf);
         assert_eq!(path, PathBuf::from("."));
         assert_eq!(language, SupportedLanguage::Default);
@@ -603,8 +599,6 @@ mod utils_tests {
         assert_eq!(key_files, expected_files);
     }
 
-
-
     /// Test `get_fake_data_output_value` for Protobuf output.
     #[test]
     fn test_get_fake_data_output_value_protobuf() {
@@ -620,11 +614,8 @@ mod utils_tests {
                 let age = value.as_i32().unwrap(); // Directly unwrap the Option<i32>
                 assert!(age >= 8 && age <= 90);
             }
-            _ => panic!("Expected Protobuf output"),
         }
     }
-
-
 
     /// Test `get_fake_data_output_value` with a list type for Protobuf.
     #[test]
@@ -646,7 +637,6 @@ mod utils_tests {
                     assert!(!item.as_str().unwrap().is_empty());
                 }
             }
-            _ => panic!("Expected Protobuf List output"),
         }
     }
 }
