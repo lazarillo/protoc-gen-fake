@@ -17,7 +17,7 @@ The fake data it generates is binary data in exactly the same format as defined 
 * [Installation](#installation)
 * [Usage](#usage)
   * [Direct `protoc` Calls](#direct-protoc-calls)
-  * [`gen_fake.sh` Wrapper Script](#gen_fake.sh-wrapper-script)
+  * [gen_fake Wrapper Script](#gen_fake-wrapper-script)
   * [Generating Language-Specific Protobuf Files](#generating-language-specific-protobuf-files)
   * [Utilizing Generated Fake Data](#utilizing-generated-fake-data)
 * [Configuration](#configuration)
@@ -142,7 +142,7 @@ protoc --proto_path=proto \
        proto/examples/full_customer.proto
 ```
 
-### `gen_fake.sh` Wrapper Script
+### gen_fake Wrapper Script
 
 To simplify the command-line usage and avoid specifying the output path twice for binary output, you can use the provided `gen_fake.sh` wrapper script. This script handles the internal translation of a single `--out_path` argument into the necessary `protoc` and `--fake_opt` parameters.
 
@@ -157,7 +157,7 @@ To simplify the command-line usage and avoid specifying the output path twice fo
 
 Before you can utilize the fake data in your application, you often need to generate language-specific protobuf classes from your `.proto` definitions. Here are examples for Python and Go.
 
-#### Python
+#### Generating Python Code
 
 ```bash
 protoc --proto_path=proto \
@@ -168,7 +168,7 @@ protoc --proto_path=proto \
 
 * `--python_out=examples`: Specifies the output directory for the generated Python protobuf files.
 
-#### Go
+#### Generating Go Code
 
 (Note: This requires `protoc-gen-go` to be installed and in your `$PATH`)
 
@@ -187,7 +187,7 @@ protoc --proto_path=proto \
 
 Once you have generated both the fake data (binary) and the language-specific protobuf classes, you can load and use the fake data in your application.
 
-#### Python
+#### Using Fake Data in Python
 
 Assuming you have generated `full_customer_pb2.py` into the `examples` directory and `full_customer.bin` into `mike_data/`:
 
@@ -209,7 +209,7 @@ if __name__ == '__main__':
     print(fake_customer)
 ```
 
-#### Go
+#### Using Fake Data in Go
 
 Assuming you have generated `full_customer.pb.go` into the `examples` directory and `full_customer.bin` into `mike_data/`:
 
