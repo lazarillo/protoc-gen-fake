@@ -52,25 +52,26 @@
 //! It unfortunately needs to use both `prost` and `protobuf` crates to manage this, because`prost` does
 //! not expose custom options, and `protobuf` does not support dynamic messages.
 
-use base64::{engine::general_purpose, Engine as _};
+use base64::{Engine as _, engine::general_purpose};
 use prost::Message;
 use prost_reflect::{Cardinality, DynamicMessage, MessageDescriptor, Value};
+use protobuf::Message as PbMessage;
 use protobuf::descriptor::FileDescriptorProto;
 use protobuf::plugin::{
     CodeGeneratorRequest as PbCodeGeneratorRequest,
     CodeGeneratorResponse as PbCodeGeneratorResponse,
 };
-use protobuf::Message as PbMessage;
 use rand::Rng;
 use std::cmp::max;
+use std::collections::HashMap;
 use std::fs;
 pub mod utils; // Import utility functions for parsing request parameters
 use std::io::{self, Read, Write};
 use std::path::Path;
 use std::str::FromStr;
 use utils::{
-    choose_language, find_message_proto, get_key_files, parse_request_parameters, DataType,
-    DesiredOutputFormat, OutputEncoding, SupportedLanguage,
+    DataType, DesiredOutputFormat, OutputEncoding, SupportedLanguage, choose_language,
+    find_message_proto, get_key_files, parse_request_parameters,
 }; // Import Path for file handling // Import locales for fake data generation // Import Lazy for static initialization
 
 #[path = "./gen_protobuf/fake_field.rs"]
@@ -97,7 +98,9 @@ fn main() -> io::Result<()> {
             }
             "--help" | "-h" => {
                 println!("protoc-gen-fake: Protocol Buffer Fake Data Generator");
-                println!("Usage: protoc --plugin=protoc-gen-fake=<path_to_plugin> --fake_out=. --fake_opt=<options> -I <proto_path> <proto_file>");
+                println!(
+                    "Usage: protoc --plugin=protoc-gen-fake=<path_to_plugin> --fake_out=. --fake_opt=<options> -I <proto_path> <proto_file>"
+                );
                 println!("       Or: protoc-gen-fake [--version | -V] [--help | -h]");
                 println!("\nFor detailed usage with protoc, see the project README.");
                 return Ok(());
@@ -144,6 +147,13 @@ fn main() -> io::Result<()> {
     // Build the runtime descriptor pool, including what is passed by the user
     let runtime_descriptor_pool = get_runtime_descriptor_pool(&request);
 
+    // Build a map of file name to FileDescriptorProto for easy lookup
+    let file_map: HashMap<String, &FileDescriptorProto> = request
+        .proto_file
+        .iter()
+        .map(|f| (f.name().to_string(), f))
+        .collect();
+
     // Build the empty response object to populate while iterating through the files
     let mut response = PbCodeGeneratorResponse::new(); // Use .new() for rust-protobuf messages
 
@@ -175,7 +185,10 @@ fn main() -> io::Result<()> {
             if user_supplied_output_path_str == "." {
                 // If output_path is the default ".", we output to the current directory
                 // with the proto's file stem and a .bin extension.
-                binary_name = Path::new(file_stem).with_extension("bin").to_string_lossy().to_string();
+                binary_name = Path::new(file_stem)
+                    .with_extension("bin")
+                    .to_string_lossy()
+                    .to_string();
             } else if user_supplied_output_path_str.ends_with(".bin") {
                 // If the user provided a full path ending in .bin, use it as is.
                 binary_name = user_supplied_output_path_str.to_string();
@@ -183,10 +196,10 @@ fn main() -> io::Result<()> {
                 // If the user provided a path that doesn't end in .bin, treat it as a directory
                 // and append the proto's file stem with a .bin extension.
                 binary_name = Path::new(user_supplied_output_path_str.as_ref())
-                                .join(file_stem)
-                                .with_extension("bin")
-                                .to_string_lossy()
-                                .to_string();
+                    .join(file_stem)
+                    .with_extension("bin")
+                    .to_string_lossy()
+                    .to_string();
             }
             log::debug!("    output file (Base64): {}", output_name); // For protoc response
             log::warn!("    binary output path: {}", binary_name); // For actual file write
@@ -208,19 +221,20 @@ fn main() -> io::Result<()> {
             let mut message_processed = false;
             for message_descr in runtime_file_descriptor.messages() {
                 let message_name = message_descr.name();
-                let message_proto = find_message_proto(file_descr, message_name)
-                    .ok_or_else(|| {
+                let message_proto =
+                    find_message_proto(file_descr, message_name).ok_or_else(|| {
                         io::Error::new(
                             io::ErrorKind::NotFound,
                             format!("MessageProto for '{}' not found.", message_name),
                         )
                     })?;
 
-                let should_include_message = if let Some(pb_options) = message_proto.options.as_ref() {
-                    fake_msg.get(pb_options).map_or(false, |opt| opt.include)
-                } else {
-                    false
-                };
+                let should_include_message =
+                    if let Some(pb_options) = message_proto.options.as_ref() {
+                        fake_msg.get(pb_options).map_or(false, |opt| opt.include)
+                    } else {
+                        false
+                    };
 
                 if should_include_message {
                     if message_processed {
@@ -232,117 +246,15 @@ fn main() -> io::Result<()> {
                     }
                     message_processed = true;
                     log::debug!(" Message: {}", message_name);
-                    let mut message = DynamicMessage::new(message_descr.clone());
-                    for field_descr in message_descr.fields() {
-                        let field_name = field_descr.name();
-                        let field_kind = &field_descr.kind();
-                        let is_list_field = field_descr.is_list();
-                        let field_cardinality = field_descr.cardinality();
-
-                        let message_proto = find_message_proto(file_descr, message_name)
-                            .ok_or_else(|| {
-                                io::Error::new(
-                                    io::ErrorKind::NotFound,
-                                    format!("MessageProto for '{}' not found.", message_name),
-                                )
-                            })?;
-
-                        let field_proto = match message_proto
-                            .field
-                            .iter()
-                            .find(|f| f.name.as_deref() == Some(field_name))
-                        {
-                            Some(fp) => fp,
-                            None => continue, // Skip if field not found in proto
-                        };
-
-                        if let Some(pb_options) = field_proto.options.as_ref() {
-                            if let Some(fake_data_option) = fake_data.get(pb_options) {
-                                let min_count = max(fake_data_option.min_count, 0);
-                                let max_count = max(fake_data_option.max_count, max(min_count, 1));
-                                let data_type = fake_data_option.data_type.as_str();
-                                let field_level_language =
-                                    SupportedLanguage::from_str(fake_data_option.language.as_str())
-                                        .unwrap_or_default();
-                                let language = &choose_language(
-                                    &field_level_language,
-                                    &global_language,
-                                    force_global_language,
-                                );
-
-                                if let prost_reflect::Kind::Message(nested_message_descr) = field_kind.clone() {
-                                    // RECURSIVE CALL FOR NESTED MESSAGE
-                                    if is_list_field {
-                                        let mut nested_messages = Vec::new();
-                                        let num_to_create = rng.random_range(min_count..=max_count);
-                                        for _ in 0..num_to_create {
-                                            let nested_msg = generate_fake_message_field(
-                                                &nested_message_descr,
-                                                file_descr,
-                                                &mut rng,
-                                                &output_format,
-                                                &global_language,
-                                                force_global_language,
-                                                &runtime_descriptor_pool,
-                                            )?;
-                                            nested_messages.push(Value::Message(nested_msg));
-                                        }
-                                        message.set_field(&field_descr, Value::List(nested_messages));
-                                    } else {
-                                        let nested_msg = generate_fake_message_field(
-                                            &nested_message_descr,
-                                            file_descr,
-                                            &mut rng,
-                                            &output_format,
-                                            &global_language,
-                                            force_global_language,
-                                            &runtime_descriptor_pool,
-                                        )?;
-                                        message.set_field(&field_descr, Value::Message(nested_msg));
-                                    }
-                                } else {
-                                    // Handle primitive types
-                                    let mut fake_field_value: Option<DataType> = None;
-                                    if is_list_field {
-                                        let mut repeated_values = Vec::new();
-                                        let num_values = rng.random_range(min_count..=max_count);
-                                        for _ in 0..num_values {
-                                            let DataType::Protobuf(proto_value) =
-                                                get_fake_data_output_value(
-                                                    data_type,
-                                                    language,
-                                                    &output_format,
-                                                    field_kind,
-                                                );
-                                            repeated_values.push(proto_value);
-                                        }
-                                        fake_field_value =
-                                            Some(DataType::Protobuf(Value::List(repeated_values)));
-                                    } else if field_cardinality == Cardinality::Required {
-                                        fake_field_value = Some(get_fake_data_output_value(
-                                            data_type,
-                                            language,
-                                            &output_format,
-                                            field_kind,
-                                        ));
-                                    } else if field_cardinality == Cardinality::Optional {
-                                        if rng.random_bool(0.6) || min_count > 0 {
-                                            fake_field_value = Some(get_fake_data_output_value(
-                                                data_type,
-                                                language,
-                                                &output_format,
-                                                field_kind,
-                                            ));
-                                        }
-                                    }
-
-                                    if let Some(DataType::Protobuf(value)) = fake_field_value {
-                                        message.set_field(&field_descr, value);
-                                    }
-                                }
-                            }
-                        }
-                    }
+                    let message = generate_fake_message_field(
+                        &message_descr,
+                        &file_map,
+                        &mut rng,
+                        &output_format,
+                        &global_language,
+                        force_global_language,
+                        &runtime_descriptor_pool,
+                    )?;
                     match output_format {
                         _ => {
                             all_messages.push(message);
@@ -381,7 +293,6 @@ fn main() -> io::Result<()> {
         }
     }
 
-
     // Encode the CodeGeneratorResponse and write to stdout
     let mut output_buffer = Vec::new();
     response.write_to_vec(&mut output_buffer)?; // Use write_to_vec() for rust-protobuf
@@ -394,7 +305,7 @@ fn main() -> io::Result<()> {
 /// populating its fields with fake data based on options.
 fn generate_fake_message_field(
     message_descr: &MessageDescriptor,
-    file_descr: &FileDescriptorProto, // Need to pass this down for protobuf options
+    file_map: &HashMap<String, &FileDescriptorProto>, // Need to pass this down for protobuf options
     rng: &mut impl Rng,
     output_format: &DesiredOutputFormat,
     global_language: &SupportedLanguage,
@@ -413,7 +324,18 @@ fn generate_fake_message_field(
 
         // Find the corresponding protobuf FieldDescriptorProto to get custom options
         // This is necessary because prost-reflect's FieldDescriptor doesn't expose custom options directly.
-        let message_proto = find_message_proto(file_descr, message_descr.name())
+
+        // Find the file that defines this message
+        let parent_file = message_descr.parent_file();
+        let parent_file_name = parent_file.name();
+        let parent_file_descr = file_map.get(parent_file_name).ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::NotFound,
+                format!("FileDescriptorProto for '{}' not found.", parent_file_name),
+            )
+        })?;
+
+        let message_proto = find_message_proto(parent_file_descr, message_descr.name())
             .ok_or_else(|| {
                 io::Error::new(
                     io::ErrorKind::NotFound,
@@ -435,12 +357,11 @@ fn generate_fake_message_field(
         if let Some(pb_options) = field_proto.options.as_ref() {
             if let Some(fake_data_option) = fake_data.get(pb_options) {
                 let data_type = fake_data_option.data_type.as_str();
-                let field_level_language = match SupportedLanguage::from_str(
-                    fake_data_option.language.as_str(),
-                ) {
-                    Ok(lang) => lang,
-                    Err(_) => SupportedLanguage::Default,
-                };
+                let field_level_language =
+                    match SupportedLanguage::from_str(fake_data_option.language.as_str()) {
+                        Ok(lang) => lang,
+                        Err(_) => SupportedLanguage::Default,
+                    };
                 let language = &choose_language(
                     &field_level_language,
                     &global_language,
@@ -457,7 +378,7 @@ fn generate_fake_message_field(
                         for _ in 0..num_values {
                             let nested_msg = generate_fake_message_field(
                                 &nested_message_descr,
-                                file_descr,
+                                file_map,
                                 rng,
                                 output_format,
                                 global_language,
@@ -466,11 +387,14 @@ fn generate_fake_message_field(
                             )?;
                             nested_messages.push(nested_msg);
                         }
-                        message.set_field(&field_descr, Value::List(nested_messages.into_iter().map(Value::Message).collect()));
+                        message.set_field(
+                            &field_descr,
+                            Value::List(nested_messages.into_iter().map(Value::Message).collect()),
+                        );
                     } else {
                         let nested_msg = generate_fake_message_field(
                             &nested_message_descr,
-                            file_descr,
+                            file_map,
                             rng,
                             output_format,
                             global_language,
@@ -534,4 +458,3 @@ fn generate_fake_message_field(
     }
     Ok(message)
 }
-

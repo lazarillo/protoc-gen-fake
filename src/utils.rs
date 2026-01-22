@@ -412,9 +412,10 @@ pub fn get_fake_data_output_value(
 
         _ => {
             if let ProstFieldKind::Enum(enum_descr) = field_kind {
+                log::info!("Processing Enum: {}", enum_descr.full_name());
                 if possible_value.is_none() {
                     let mut rng = rand::rng();
-                    // Filter out the common "_UNSPECIFIED" value at index 0
+                    // Filter out the common "_UNSPECIFIED" value at index 0 if it exists
                     let values: Vec<_> = enum_descr.values().filter(|v| v.number() != 0).collect();
                     if let Some(random_value) = values.choose(&mut rng) {
                         log::info!(
@@ -423,6 +424,21 @@ pub fn get_fake_data_output_value(
                             random_value.name()
                         );
                         return DataType::Protobuf(Value::EnumNumber(random_value.number()));
+                    } else {
+                         // If no non-zero values, check if 0 is valid
+                         if let Some(_zero_value) = enum_descr.values().find(|v| v.number() == 0) {
+                             log::debug!("    Only value 0 found for enum '{}'.", enum_descr.full_name());
+                             return DataType::Protobuf(Value::EnumNumber(0));
+                         } else if let Some(first_value) = enum_descr.values().next() {
+                             // If 0 is not valid, use the first available value
+                             log::warn!("    Value 0 not found for enum '{}'. Defaulting to first value '{}' ({})", 
+                                 enum_descr.full_name(), first_value.name(), first_value.number());
+                             return DataType::Protobuf(Value::EnumNumber(first_value.number()));
+                         } else {
+                             // This should be impossible for a valid enum
+                             log::error!("    Enum '{}' has no values!", enum_descr.full_name());
+                             return DataType::Protobuf(Value::EnumNumber(0));
+                         }
                     }
                 }
             }
