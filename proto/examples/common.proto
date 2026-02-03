@@ -1,0 +1,33 @@
+syntax = "proto3";
+
+package examples.common;
+
+import "gen_fake/fake_field.proto";
+
+option go_package = "example/common";
+
+message Address {
+  string street = 1 [(gen_fake.fake_data) = { data_type: "StreetName" }];
+  string city = 2 [(gen_fake.fake_data) = { data_type: "CityName" }];
+  string state = 3 [(gen_fake.fake_data) = { data_type: "StateName" }];
+  string zip_code = 4 [(gen_fake.fake_data) = { data_type: "ZipCode" }];
+}
+
+enum BloodType {
+  BLOOD_TYPE_UNSPECIFIED = 0;
+  A_POSITIVE = 1;
+  A_NEGATIVE = 2;
+  B_POSITIVE = 3;
+  B_NEGATIVE = 4;
+  O_POSITIVE = 5;
+  O_NEGATIVE = 6;
+  AB_POSITIVE = 7;
+  AB_NEGATIVE = 8;
+}
+
+message Vitals {
+  int32 heart_rate = 1 [(gen_fake.fake_data) = { data_type: "Integer", min_count: 60, max_count: 100 }];
+  int32 systolic_bp = 2 [(gen_fake.fake_data) = { data_type: "Integer", min_count: 90, max_count: 140 }];
+  int32 diastolic_bp = 3 [(gen_fake.fake_data) = { data_type: "Integer", min_count: 60, max_count: 90 }];
+  float temperature_c = 4 [(gen_fake.fake_data) = { data_type: "Decimal", min_count: 36, max_count: 38 }];
+}

@@ -12,6 +12,15 @@ The fake data it generates is binary data in exactly the same format as defined 
 * **Flexible Output:** Choose between binary or Base64 encoded output, and control output paths.
     (Note: Base64 encoding provides compatibility with `protoc`'s string-based output mechanism, but for most use cases, direct binary file output (configured via `--fake_opt output_path`) is preferred. Base64 support may be re-evaluated for future versions if its utility does not justify the added complexity.)
 
+## Included Examples
+
+The `proto/examples` directory contains several partial and complete examples to demonstrate features:
+
+* **`simple_user.proto`**: A basic example showing simple field types and the `fake_msg` inclusion option. Great for getting started.
+* **`common.proto`**: A shared library of messages (like `Address` and `Vitals`) and enums (`BloodType`). This demonstrates how to share types across multiple project files.
+* **`medical/patient_record.proto`**: A complex example representing a medical record. It imports `common.proto` and demonstrates nested messages, repeated fields, and explicit `min_count`/`max_count` configurations.
+* **`full_customer.proto`**: A customer profile example that also uses `common.proto` for addresses but defines its own phone logic. It shows robust usage of internationalization (`language` option) for names.
+
 ## Table of Contents
 
 * [Installation](#installation)

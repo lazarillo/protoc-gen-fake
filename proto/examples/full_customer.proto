@@ -1,13 +1,15 @@
 syntax = "proto3";
 package examples;
 
+import "examples/common.proto";
 import "gen_fake/fake_field.proto";
+
+option go_package = "example/customer";
 
 message Customer {
   option (gen_fake.fake_msg).include = true;
   string id = 1 [(gen_fake.fake_data) = {
     data_type: "UUID"
-    // Ensure that the ID is always present, so min_count is 1.
     min_count: 1
   }];
   string given_name = 2 [(gen_fake.fake_data) = {
@@ -18,8 +20,10 @@ message Customer {
     data_type: "LastName"
     language: "PT_BR"
   }];
-  // Allow for `address` to be populated, but without any specifications.
-  Address address = 4 [(gen_fake.fake_data) = {}];
+  
+  // Use shared Address from common
+  examples.common.Address address = 4 [(gen_fake.fake_data) = {}];
+  
   repeated Phone phone_numbers = 5 [(gen_fake.fake_data) = {
     min_count: 1
     max_count: 3
@@ -34,27 +38,12 @@ message Customer {
   }];
 }
 
-message Address {
-  Street street = 1 [(gen_fake.fake_data) = {}];
-  string city = 2 [(gen_fake.fake_data).data_type = "CityName"];
-  string country = 3 [(gen_fake.fake_data).data_type = "CountryName"];
-  message Street {
-    uint32 number = 1 [(gen_fake.fake_data).data_type = "WholeNumber"];
-    string name = 2 [(gen_fake.fake_data) = {
-      data_type: "StreetName"
-      language: "AR_SA"
-    }];
-  }
-}
-
 message Phone {
   string number = 1 [(gen_fake.fake_data) = {
     data_type: "PhoneNumber"
     language: "PT_BR"
     min_count: 1
   }];
-  // Phone type, such as "Mobile", "Home", "Work", etc.
-  // In the future, a random generation of enums should be supported.
   PhoneType type = 2 [(gen_fake.fake_data).min_count = 1];
   enum PhoneType {
     PHONE_TYPE_UNSPECIFIED = 0;
