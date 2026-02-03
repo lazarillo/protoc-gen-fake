@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.2](https://github.com/lazarillo/protoc-gen-fake/compare/protoc-gen-fake-v0.3.1...protoc-gen-fake-v0.3.2) (2026-02-03)
+
+
+### Bug Fixes
+
+* bug when importing other proto files ([#11](https://github.com/lazarillo/protoc-gen-fake/issues/11)) ([93abbfb](https://github.com/lazarillo/protoc-gen-fake/commit/93abbfb10040ffa56536a16b6ba3bf4821d77ee6))
+
 ## [0.3.1](https://github.com/lazarillo/protoc-gen-fake/compare/protoc-gen-fake-v0.3.0...protoc-gen-fake-v0.3.1) (2025-12-10)
 
 
