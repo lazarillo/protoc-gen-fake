@@ -30,10 +30,10 @@ once_cell = "1.21.3"
 prost = "0.14.1"
 prost-reflect = "0.16.0"
 prost-types = "0.14.1"
-protobuf = "4.33.4-release"
+protobuf = "3.7.1"
 rand = "0.9.1"
 
 [build-dependencies]
 prost-build = "0.14.1"
-protobuf-codegen = "4.33.4-release"
-protobuf-src = "2.1.1+27.1"
+protobuf-codegen = "3.7.1"
+protobuf-src = "2.1.1"
