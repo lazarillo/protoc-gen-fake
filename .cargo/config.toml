@@ -1,5 +1,4 @@
 [env]
 # Fixes LNK2038 mismatch on Windows (MSVC) by forcing CMake dependencies (like protobuf-src)
-# to use the static CRT (/MT or /MTd) instead of the dynamic CRT (/MD or /MDd),
-# matching Rust's default behavior.
-CMAKE_MSVC_RUNTIME_LIBRARY = "MultiThreaded$<$<CONFIG:Debug>:Debug>"
+# to use the dynamic CRT (/MD or /MDd) matching the abseil dependency.
+CMAKE_MSVC_RUNTIME_LIBRARY = "MultiThreadedDLL$<$<CONFIG:Debug>:Debug>"
