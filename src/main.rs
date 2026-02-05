@@ -11,8 +11,9 @@ use prost_reflect::{
 
 use prost_types::compiler::{CodeGeneratorRequest, CodeGeneratorResponse};
 use rand::Rng;
+use rand::seq::IndexedRandom;
 use std::cmp::max;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use std::fs;
 use std::io::{self, Read, Write};
@@ -267,9 +268,31 @@ fn generate_fake_message_field(
 ) -> io::Result<DynamicMessage> {
     let mut message = DynamicMessage::new(message_descr.clone());
 
+    // 0. Pre-calculate active Oneof fields
+    let mut active_oneof_fields = HashSet::new();
+    for oneof in message_descr.oneofs() {
+        // Collect all fields in this oneof
+        let fields: Vec<prost_reflect::FieldDescriptor> = oneof.fields().collect();
+        // Pick one randomly
+        if let Some(chosen) = fields.choose(rng) {
+            active_oneof_fields.insert(chosen.full_name().to_string());
+        }
+    }
+
     for field_descr in message_descr.fields() {
+        // Check Oneof constraint
+        if let Some(_oneof) = field_descr.containing_oneof() {
+            let fname = field_descr.full_name().to_string();
+            if !active_oneof_fields.contains(&fname) {
+                // Skip this field as it wasn't selected for the oneof group
+                continue;
+            }
+        } else {
+            // log::debug!("Field {} is not in a oneof", field_descr.full_name());
+        }
+
         let field_kind = field_descr.kind();
-        let is_list_field = field_descr.is_list();
+        let is_list_field = field_descr.is_list() || field_descr.is_map();
         let cardinality = field_descr.cardinality();
 
         let mut fake_field_value: Option<DataType> = None;
@@ -277,10 +300,11 @@ fn generate_fake_message_field(
         // 1. Check for `fake_data` option (ID 1491)
         let mut fake_opt_data: Option<(String, SupportedLanguage, i32, i32)> = None;
 
-        let field_full_name = field_descr.full_name();
+        let field_full_name = field_descr.full_name().to_string();
 
         // Use options_map for lookup
-        if let Some(field_options) = options_map.get(field_full_name) {
+        if let Some(field_options) = options_map.get(&field_full_name) {
+            // ... existing lookup ...
             if let Some(ext_file) = runtime_descriptor_pool
                 .get_file_by_name("gen_fake/fake_field.proto")
                 .or_else(|| {
@@ -291,7 +315,6 @@ fn generate_fake_message_field(
                     if field_options.has_extension(&ext_desc) {
                         let val_cow = field_options.get_extension(&ext_desc);
                         if let Value::Message(fake_data_msg) = val_cow.as_ref() {
-                            // Extract fields: data_type (1), language (2), min_count (3), max_count (4)
                             let type_str = fake_data_msg
                                 .descriptor()
                                 .get_field_by_name("data_type")
@@ -332,11 +355,34 @@ fn generate_fake_message_field(
                                 .map(|f| fake_data_msg.get_field(&f).as_ref().as_i32().unwrap_or(5))
                                 .unwrap_or(5);
 
+                            log::debug!(
+                                "Field {}: Parsed options min_count={}, max_count={}",
+                                field_full_name,
+                                min_c,
+                                max_c
+                            );
+
                             fake_opt_data = Some((type_str, lang, min_c, max_c));
                         }
                     }
                 }
             }
+        }
+
+        // Helper: Default fake data for Map Entries if explicit options are missing
+        if fake_opt_data.is_none() && message_descr.is_map_entry() {
+            let type_str = match field_kind {
+                prost_reflect::Kind::String => "UUID", // Use UUID for unique string keys
+                prost_reflect::Kind::Int32
+                | prost_reflect::Kind::Sint32
+                | prost_reflect::Kind::Sfixed32 => "Integer",
+                prost_reflect::Kind::Int64
+                | prost_reflect::Kind::Sint64
+                | prost_reflect::Kind::Sfixed64 => "Integer", // FakeData::Integer handles casting ideally, or we need Int64? Integer is i32 in fake_data.rs, might truncate.
+                prost_reflect::Kind::Uint32 | prost_reflect::Kind::Fixed32 => "WholeNumber",
+                _ => "Word", // Fallback
+            };
+            fake_opt_data = Some((type_str.to_string(), SupportedLanguage::Default, 1, 1));
         }
 
         if let Some((data_type, field_lang, min_c, max_c)) = fake_opt_data {
@@ -347,7 +393,49 @@ fn generate_fake_message_field(
             match field_kind {
                 prost_reflect::Kind::Message(ref nested_msg_descr) => {
                     // Recursion
-                    if is_list_field {
+                    if field_descr.is_map() {
+                        let mut map_val = HashMap::new();
+                        let count = rng.random_range(min_count..=max_count);
+                        // Map Entry has Key (1) and Value (2)
+                        // But we need to verify we can access them. MapEntry is a Message.
+                        if let (Some(key_field), Some(val_field)) =
+                            (nested_msg_descr.get_field(1), nested_msg_descr.get_field(2))
+                        {
+                            for _ in 0..count {
+                                let entry_msg = generate_fake_message_field(
+                                    &nested_msg_descr,
+                                    rng,
+                                    output_format,
+                                    global_language,
+                                    force_global_language,
+                                    runtime_descriptor_pool,
+                                    options_map,
+                                )?;
+
+                                let key_val = entry_msg.get_field(&key_field);
+                                let val_val = entry_msg.get_field(&val_field);
+
+                                // Map keys must be converted to MapKey
+                                // We handle basic types.
+                                let map_key_opt = match key_val.as_ref() {
+                                    Value::Bool(b) => Some(prost_reflect::MapKey::Bool(*b)),
+                                    Value::I32(i) => Some(prost_reflect::MapKey::I32(*i)),
+                                    Value::I64(i) => Some(prost_reflect::MapKey::I64(*i)),
+                                    Value::U32(i) => Some(prost_reflect::MapKey::U32(*i)),
+                                    Value::U64(i) => Some(prost_reflect::MapKey::U64(*i)),
+                                    Value::String(s) => {
+                                        Some(prost_reflect::MapKey::String(s.clone()))
+                                    }
+                                    _ => None,
+                                };
+
+                                if let Some(map_key) = map_key_opt {
+                                    map_val.insert(map_key, val_val.as_ref().clone());
+                                }
+                            }
+                        }
+                        message.set_field(&field_descr, Value::Map(map_val));
+                    } else if is_list_field {
                         let mut nested_list = Vec::new();
                         let count = rng.random_range(min_count..=max_count);
                         for _ in 0..count {

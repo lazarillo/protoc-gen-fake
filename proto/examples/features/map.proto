@@ -1,0 +1,22 @@
+syntax = "proto3";
+package examples.features;
+
+import "gen_fake/fake_field.proto";
+
+message MapMessage {
+  option (gen_fake.fake_msg).include = true;
+
+  string id = 1 [(gen_fake.fake_data).data_type = "UUID"];
+
+  // Map of project_id (UUID) to role (Job Title)
+  map<string, string> project_roles = 2 [
+    (gen_fake.fake_data) = {
+        min_count: 2
+        max_count: 2
+        // We lack a way to specify key/value types separately in current fake_field.proto!
+        // This confirms Maps are likely not fully supported or need a spec update.
+        // For now, let's see what happens if we attempt it. 
+        // Maybe we just rely on "default" generation if no specific type is found?
+    }
+  ];
+}

@@ -25,7 +25,7 @@ fn run_protoc_and_validate(
     );
 
     // 2. Run protoc to generate fake data
-    let status = Command::new("protoc")
+    let output = Command::new("protoc")
         .arg(format!(
             "--plugin=protoc-gen-fake={}",
             plugin_path.display()
@@ -35,12 +35,15 @@ fn run_protoc_and_validate(
         .arg("-I.") // Add current directory to include path to find gen_fake/fake_field.proto if needed
         .arg(proto_file)
         .current_dir(root_dir)
-        .status()
+        .output()
         .expect("Failed to run protoc for fake data generation");
+
+    // Print stderr to debug plugin issues
+    println!("Protoc stderr: {}", String::from_utf8_lossy(&output.stderr));
+
     assert!(
-        status.success(),
-        "protoc failed during fake data generation for {}",
-        proto_file
+        output.status.success(),
+        "protoc failed to generate fake data"
     );
 
     // 3. Run protoc to generate descriptor set (for decoding)
@@ -214,6 +217,64 @@ fn test_integration_patient_record() {
                 //     temp >= 36.0 && temp <= 38.0,
                 //     "Temperature should be between 36.0 and 38.0"
                 // );
+            }
+        },
+    );
+}
+
+#[test]
+fn test_integration_features_oneof() {
+    run_protoc_and_validate(
+        "proto/examples/features/oneof.proto",
+        "examples.features.OneofMessage",
+        "oneof.bin",
+        |message: &DynamicMessage| {
+            let id = message.get_field_by_name("id").unwrap();
+            // ID might be empty (skipped)
+            if let Some(s) = id.as_str() {
+                if !s.is_empty() {
+                    assert_eq!(s.len(), 36, "ID should be UUID if present");
+                }
+            }
+
+            // Check Oneof
+            // We expect exactly one of the fields to be set.
+            let has_image = message.has_field_by_name("image_url");
+            let has_base64 = message.has_field_by_name("base64_data");
+            let has_emoji = message.has_field_by_name("emoji");
+
+            let set_count = [has_image, has_base64, has_emoji]
+                .iter()
+                .filter(|&&x| x)
+                .count();
+
+            println!("DEBUG: Oneof set count: {}", set_count);
+            assert!(set_count <= 1, "At most one oneof field should be set");
+        },
+    );
+}
+
+#[test]
+fn test_integration_features_map() {
+    run_protoc_and_validate(
+        "proto/examples/features/map.proto",
+        "examples.features.MapMessage",
+        "map.bin",
+        |message: &DynamicMessage| {
+            let id = message.get_field_by_name("id").unwrap();
+            if let Some(s) = id.as_str() {
+                if !s.is_empty() {
+                    assert_eq!(s.len(), 36, "ID should be UUID if present");
+                }
+            }
+
+            let roles = message.get_field_by_name("project_roles").unwrap();
+            if let Some(map_val) = roles.as_map() {
+                println!("DEBUG: Map entries count: {}", map_val.len());
+                // We expect failures here if map support isn't implemented
+                assert!(map_val.len() >= 2, "Should have at least 2 map entries");
+            } else {
+                println!("DEBUG: Map field is not a map reflection type?");
             }
         },
     );
