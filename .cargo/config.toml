@@ -1,4 +1,0 @@
-[env]
-# Force CMake to use the MultiThreadedDebugDLL runtime for MSVC builds, 
-# aligning with Abseil's defaults and preventing LNK2038 errors.
-CMAKE_MSVC_RUNTIME_LIBRARY = { value = "MultiThreadedDebugDLL", force = true }
