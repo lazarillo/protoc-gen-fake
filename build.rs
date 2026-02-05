@@ -4,10 +4,6 @@ use std::error::Error;
 use std::path::PathBuf;
 
 fn main() -> Result<(), Box<dyn Error>> {
-    unsafe {
-        std::env::set_var("PROTOC", protobuf_src::protoc());
-    }
-
     let proto_dir = "proto"; // Root of your .proto files
     let out_dir_cargo = PathBuf::from(env::var("OUT_DIR")?); // Cargo's standard output directory
 
