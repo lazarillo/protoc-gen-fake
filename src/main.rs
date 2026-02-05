@@ -292,7 +292,7 @@ fn generate_fake_message_field(
         }
 
         let field_kind = field_descr.kind();
-        let is_list_field = field_descr.is_list() || field_descr.is_map();
+        let is_list_field = field_descr.is_list();
         let cardinality = field_descr.cardinality();
 
         let mut fake_field_value: Option<DataType> = None;
