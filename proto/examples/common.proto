@@ -31,3 +31,15 @@ message Vitals {
   int32 diastolic_bp = 3 [(gen_fake.fake_data) = { data_type: "Integer", min_count: 60, max_count: 90 }];
   float temperature_c = 4 [(gen_fake.fake_data) = { data_type: "Decimal", min_count: 36, max_count: 38 }];
 }
+
+message Avatar {
+  oneof kind {
+    string url = 1 [(gen_fake.fake_data) = { data_type: "Image" }];
+    string base64_data = 2 [(gen_fake.fake_data) = { data_type: "Word" }]; // Just random wood for base64 simulation
+    string emoji = 3 [(gen_fake.fake_data) = { data_type: "Word" }];
+  }
+}
+
+message CustomDetails {
+  map<string, string> properties = 1 [(gen_fake.fake_data) = { min_count: 2, max_count: 5 }];
+}

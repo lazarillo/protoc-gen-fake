@@ -36,6 +36,9 @@ message Customer {
     min_count: 0
     max_count: 13
   }];
+
+  examples.common.Avatar avatar = 9 [(gen_fake.fake_data) = {}];
+  examples.common.CustomDetails custom_details = 10 [(gen_fake.fake_data) = {}];
 }
 
 message Phone {

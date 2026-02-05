@@ -26,6 +26,7 @@ fn run_protoc_and_validate(
 
     // 2. Run protoc to generate fake data
     let output = Command::new("protoc")
+        .env("RUST_LOG", "debug") // Enable debug logging for the plugin
         .arg(format!(
             "--plugin=protoc-gen-fake={}",
             plugin_path.display()
@@ -165,6 +166,40 @@ fn test_integration_full_customer() {
             let friends = message.get_field_by_name("friend_ids").unwrap();
             let friends_list = friends.as_list().unwrap();
             assert!(friends_list.len() <= 13, "Should have at most 13 friends");
+
+            // Check Avatar (Oneof)
+            let avatar_val = message
+                .get_field_by_name("avatar")
+                .expect("avatar field missing");
+            // Avatar is optional (message type), but if present we check oneof constraint
+            if let Some(avatar_msg) = avatar_val.as_message() {
+                let has_url = avatar_msg.has_field_by_name("url");
+                let has_base64 = avatar_msg.has_field_by_name("base64_data");
+                let has_emoji = avatar_msg.has_field_by_name("emoji");
+
+                let set_count = [has_url, has_base64, has_emoji]
+                    .into_iter()
+                    .filter(|x| *x)
+                    .count();
+                assert!(
+                    set_count <= 1,
+                    "At most one avatar oneof field should be set"
+                );
+            }
+
+            // Check Custom Details (Map)
+            let details_val = message
+                .get_field_by_name("custom_details")
+                .expect("custom_details missing");
+            if let Some(details_msg) = details_val.as_message() {
+                let props = details_msg
+                    .get_field_by_name("properties")
+                    .expect("properties missing");
+                if let Some(map_val) = props.as_map() {
+                    assert!(map_val.len() >= 2, "Should have at least 2 custom details");
+                    assert!(map_val.len() <= 5, "Should have at most 5 custom details");
+                }
+            }
         },
     );
 }
@@ -218,63 +253,19 @@ fn test_integration_patient_record() {
                 //     "Temperature should be between 36.0 and 38.0"
                 // );
             }
-        },
-    );
-}
 
-#[test]
-fn test_integration_features_oneof() {
-    run_protoc_and_validate(
-        "proto/examples/features/oneof.proto",
-        "examples.features.OneofMessage",
-        "oneof.bin",
-        |message: &DynamicMessage| {
-            let id = message.get_field_by_name("id").unwrap();
-            // ID might be empty (skipped)
-            if let Some(s) = id.as_str() {
-                if !s.is_empty() {
-                    assert_eq!(s.len(), 36, "ID should be UUID if present");
+            // Check Custom Details (Map)
+            let details_val = message
+                .get_field_by_name("custom_details")
+                .expect("custom_details field missing");
+            if let Some(details_msg) = details_val.as_message() {
+                let props = details_msg
+                    .get_field_by_name("properties")
+                    .expect("properties field missing");
+                if let Some(map_val) = props.as_map() {
+                    assert!(map_val.len() >= 2, "Should have at least 2 custom details");
+                    assert!(map_val.len() <= 5, "Should have at most 5 custom details");
                 }
-            }
-
-            // Check Oneof
-            // We expect exactly one of the fields to be set.
-            let has_image = message.has_field_by_name("image_url");
-            let has_base64 = message.has_field_by_name("base64_data");
-            let has_emoji = message.has_field_by_name("emoji");
-
-            let set_count = [has_image, has_base64, has_emoji]
-                .iter()
-                .filter(|&&x| x)
-                .count();
-
-            println!("DEBUG: Oneof set count: {}", set_count);
-            assert!(set_count <= 1, "At most one oneof field should be set");
-        },
-    );
-}
-
-#[test]
-fn test_integration_features_map() {
-    run_protoc_and_validate(
-        "proto/examples/features/map.proto",
-        "examples.features.MapMessage",
-        "map.bin",
-        |message: &DynamicMessage| {
-            let id = message.get_field_by_name("id").unwrap();
-            if let Some(s) = id.as_str() {
-                if !s.is_empty() {
-                    assert_eq!(s.len(), 36, "ID should be UUID if present");
-                }
-            }
-
-            let roles = message.get_field_by_name("project_roles").unwrap();
-            if let Some(map_val) = roles.as_map() {
-                println!("DEBUG: Map entries count: {}", map_val.len());
-                // We expect failures here if map support isn't implemented
-                assert!(map_val.len() >= 2, "Should have at least 2 map entries");
-            } else {
-                println!("DEBUG: Map field is not a map reflection type?");
             }
         },
     );
