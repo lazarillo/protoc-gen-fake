@@ -1,6 +1,6 @@
 [package]
 name = "protoc-gen-fake"
-version = "0.3.2"
+version = "0.3.3"
 edition = "2024"
 authors = ["Mike Williamson"]
 description = "A protobuf compiler plugin to generate fake data based on protobuf schema definitions."
@@ -22,13 +22,13 @@ categories = [
 ]
 
 [dependencies]
-base64 = "0.22.1"
-env_logger = "0.11.8"
-fake = { version = "4.3.0", features = ["derive", "chrono", "uuid", "base64"] }
-log = "0.4.27"
-once_cell = "1.21.3"
+base64 = "0.22"
+env_logger = "0.11"
+fake = { version = "4.3", features = ["derive", "chrono", "uuid", "base64"] }
+log = "0.4"
+once_cell = "1.21"
 prost = "0.14"
-prost-reflect = "0.16.0"
+prost-reflect = "0.16"
 prost-types = "0.14"
 rand = "0.9"
 

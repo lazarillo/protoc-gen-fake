@@ -7,139 +7,22 @@ on:
         description: 'Tag name to release (e.g. protoc-gen-fake-v0.2.1)'
         required: true
         type: string
-  push:
-    tags:
-      - 'protoc-gen-fake-v*' # Run on tags like protoc-gen-fake-v1.0.0
+  release:
+    types: [published]
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  test:
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v4
-    - name: Install Protoc
-      uses: arduino/setup-protoc@v3
-      with:
-        repo-token: ${{ secrets.GITHUB_TOKEN }}
-    - name: Install Rust
-      uses: dtolnay/rust-toolchain@stable
-    - name: Run tests
-      run: cargo test --verbose
+  # Reuse the test workflow (which includes the build workflow)
+  pipeline:
+    uses: ./.github/workflows/test.yml
+    with:
+      ref: ${{ inputs.tag_name || github.event.release.tag_name }}
 
-  # Build jobs for different platforms
-  build-linux:
-    needs: test
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.tag_name || github.ref_name }}
-      - name: Install Protoc
-        uses: arduino/setup-protoc@v3
-        with:
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          target: x86_64-unknown-linux-gnu
-      - name: Build
-        run: cargo build --release --target x86_64-unknown-linux-gnu
-      - name: Package
-        run: |
-          mkdir staging
-          cp target/x86_64-unknown-linux-gnu/release/protoc-gen-fake staging/protoc-gen-fake-linux-x86_64
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: protoc-gen-fake-linux-x86_64
-          path: staging/protoc-gen-fake-linux-x86_64
-
-  build-macos-intel:
-    needs: test
-    runs-on: macos-latest # GitHub Actions provides intel runners
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.tag_name || github.ref_name }}
-      - name: Install Protoc
-        uses: arduino/setup-protoc@v3
-        with:
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          target: x86_64-apple-darwin
-      - name: Build
-        run: cargo build --release --target x86_64-apple-darwin
-      - name: Package
-        run: |
-          mkdir staging
-          cp target/x86_64-apple-darwin/release/protoc-gen-fake staging/protoc-gen-fake-darwin-x86_64
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: protoc-gen-fake-darwin-x86_64
-          path: staging/protoc-gen-fake-darwin-x86_64
-
-  build-macos-arm:
-    needs: test
-    runs-on: macos-14 # Specifically for Apple Silicon (ARM64)
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.tag_name || github.ref_name }}
-      - name: Install Protoc
-        uses: arduino/setup-protoc@v3
-        with:
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          target: aarch64-apple-darwin
-      - name: Build
-        run: cargo build --release --target aarch64-apple-darwin
-      - name: Package
-        run: |
-          mkdir staging
-          cp target/aarch64-apple-darwin/release/protoc-gen-fake staging/protoc-gen-fake-darwin-arm64
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: protoc-gen-fake-darwin-arm64
-          path: staging/protoc-gen-fake-darwin-arm64
-
-  build-windows:
-    needs: test
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.tag_name || github.ref_name }}
-      - name: Install Protoc
-        uses: arduino/setup-protoc@v3
-        with:
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          target: x86_64-pc-windows-msvc
-      - name: Build
-        run: cargo build --release --target x86_64-pc-windows-msvc
-      - name: Package
-        run: |
-          mkdir staging
-          cp target/x86_64-pc-windows-msvc/release/protoc-gen-fake.exe staging/protoc-gen-fake-windows-x86_64.exe
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: protoc-gen-fake-windows-x86_64
-          path: staging/protoc-gen-fake-windows-x86_64.exe
-
-  # Release job - runs after all builds are successful
+  # Release job - runs after the pipeline (test + build) is successful
   release:
-    needs: [build-linux, build-macos-intel, build-macos-arm, build-windows]
+    needs: pipeline
     runs-on: ubuntu-latest
     permissions:
       contents: write # To create a GitHub Release
@@ -153,5 +36,5 @@ jobs:
         id: create_release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ inputs.tag_name || github.ref_name }}
+          tag_name: ${{ inputs.tag_name || github.event.release.tag_name }}
           files: artifacts/**

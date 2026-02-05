@@ -1,0 +1,120 @@
+name: Build
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        description: 'The git reference to build'
+        required: false
+        type: string
+        default: ''
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+      - name: Install Protoc
+        uses: arduino/setup-protoc@v3
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          target: x86_64-unknown-linux-gnu
+      - name: Build
+        run: cargo build --release --target x86_64-unknown-linux-gnu
+      - name: Package
+        run: |
+          mkdir staging
+          cp target/x86_64-unknown-linux-gnu/release/protoc-gen-fake staging/protoc-gen-fake-linux-x86_64
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: protoc-gen-fake-linux-x86_64
+          path: staging/protoc-gen-fake-linux-x86_64
+
+  build-macos-intel:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+      - name: Install Protoc
+        uses: arduino/setup-protoc@v3
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          target: x86_64-apple-darwin
+      - name: Build
+        run: cargo build --release --target x86_64-apple-darwin
+      - name: Package
+        run: |
+          mkdir staging
+          cp target/x86_64-apple-darwin/release/protoc-gen-fake staging/protoc-gen-fake-darwin-x86_64
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: protoc-gen-fake-darwin-x86_64
+          path: staging/protoc-gen-fake-darwin-x86_64
+
+  build-macos-arm:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+      - name: Install Protoc
+        uses: arduino/setup-protoc@v3
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          target: aarch64-apple-darwin
+      - name: Build
+        run: cargo build --release --target aarch64-apple-darwin
+      - name: Package
+        run: |
+          mkdir staging
+          cp target/aarch64-apple-darwin/release/protoc-gen-fake staging/protoc-gen-fake-darwin-arm64
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: protoc-gen-fake-darwin-arm64
+          path: staging/protoc-gen-fake-darwin-arm64
+
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+      - name: Install Protoc
+        uses: arduino/setup-protoc@v3
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          target: x86_64-pc-windows-msvc
+      - name: Build
+        run: cargo build --release --target x86_64-pc-windows-msvc
+
+
+      - name: Package
+        run: |
+          mkdir staging
+          cp target/x86_64-pc-windows-msvc/release/protoc-gen-fake.exe staging/protoc-gen-fake-windows-x86_64.exe
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: protoc-gen-fake-windows-x86_64
+          path: staging/protoc-gen-fake-windows-x86_64.exe
