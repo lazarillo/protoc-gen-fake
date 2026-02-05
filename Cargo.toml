@@ -36,4 +36,3 @@ rand = "0.9.1"
 [build-dependencies]
 prost-build = "0.14.1"
 protobuf-codegen = "3.7.1"
-protobuf-src = "2.1.1"
