@@ -1,4 +1,6 @@
 [env]
 # Fixes LNK2038 mismatch on Windows (MSVC) by forcing CMake dependencies (like protobuf-src)
-# to use the dynamic CRT (/MD or /MDd) matching the abseil dependency.
-CMAKE_MSVC_RUNTIME_LIBRARY = "MultiThreadedDLL$<$<CONFIG:Debug>:Debug>"
+# to use the dynamic CRT (/MDd) matching the abseil dependency.
+# matching abseil which uses Dynamic Debug (/MDd).
+# Build dependencies run in Debug mode by default, so we explicitly select the Debug DLL version.
+CMAKE_MSVC_RUNTIME_LIBRARY = "MultiThreadedDebugDLL"

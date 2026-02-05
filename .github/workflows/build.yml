@@ -107,6 +107,11 @@ jobs:
           target: x86_64-pc-windows-msvc
       - name: Build
         run: cargo build --release --target x86_64-pc-windows-msvc
+        env:
+          # Double-ensure we use the Dynamic Debug CRT (/MDd) for C/C++ dependencies (like protobuf-src/absl)
+          # to match the absl library's default configuration and resolve LNK2038 errors.
+          CFLAGS: "/MDd"
+          CXXFLAGS: "/MDd"
       - name: Package
         run: |
           mkdir staging
