@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.3](https://github.com/lazarillo/protoc-gen-fake/compare/protoc-gen-fake-v0.3.2...protoc-gen-fake-v0.3.3) (2026-02-05)
+
+
+### Bug Fixes
+
+* add windows-specific build config ([#13](https://github.com/lazarillo/protoc-gen-fake/issues/13)) ([66fba23](https://github.com/lazarillo/protoc-gen-fake/commit/66fba236c469b84e23be7f01cd9b8382287cc778))
+
 ## [0.3.2](https://github.com/lazarillo/protoc-gen-fake/compare/protoc-gen-fake-v0.3.1...protoc-gen-fake-v0.3.2) (2026-02-03)
 
 
