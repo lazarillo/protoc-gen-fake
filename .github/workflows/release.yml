@@ -7,9 +7,8 @@ on:
         description: 'Tag name to release (e.g. protoc-gen-fake-v0.2.1)'
         required: true
         type: string
-  push:
-    tags:
-      - 'protoc-gen-fake-v*' # Run on tags like protoc-gen-fake-v1.0.0
+  release:
+    types: [published]
 
 env:
   CARGO_TERM_COLOR: always
@@ -19,7 +18,7 @@ jobs:
   pipeline:
     uses: ./.github/workflows/test.yml
     with:
-      ref: ${{ inputs.tag_name || github.ref_name }}
+      ref: ${{ inputs.tag_name || github.event.release.tag_name }}
 
   # Release job - runs after the pipeline (test + build) is successful
   release:
@@ -37,5 +36,5 @@ jobs:
         id: create_release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ inputs.tag_name || github.ref_name }}
+          tag_name: ${{ inputs.tag_name || github.event.release.tag_name }}
           files: artifacts/**
