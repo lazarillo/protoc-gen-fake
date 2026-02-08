@@ -107,8 +107,6 @@ jobs:
           target: x86_64-pc-windows-msvc
       - name: Build
         run: cargo build --release --target x86_64-pc-windows-msvc
-
-
       - name: Package
         run: |
           mkdir staging

@@ -1,0 +1,42 @@
+syntax = "proto3";
+
+package medical.records;
+
+import "gen_fake/fake_field.proto";
+import "examples/common.proto";
+
+option go_package = "example/medical/records";
+
+// This message should NOT be generated because it doesn't have the include option
+message Hospital {
+  string name = 1 [(gen_fake.fake_data) = { data_type: "CompanyName" }];
+  examples.common.Address address = 2;
+}
+
+// This message SHOULD be generated
+message PatientRecord {
+  option (gen_fake.fake_msg).include = true;
+
+  string patient_id = 1 [(gen_fake.fake_data) = { data_type: "UUID", min_count: 1 }];
+  string first_name = 2 [(gen_fake.fake_data) = { data_type: "FirstName", min_count: 1 }];
+  string last_name = 3 [(gen_fake.fake_data) = { data_type: "LastName", min_count: 1 }];
+  
+  examples.common.BloodType blood_type = 4;
+  
+  examples.common.Address home_address = 5;
+  
+  repeated examples.common.Vitals daily_vitals = 6 [(gen_fake.fake_data) = {
+    min_count: 3
+    max_count: 7
+  }];
+
+  examples.common.CustomDetails custom_details = 8 [(gen_fake.fake_data) = {}];
+
+  string notes = 7 [(gen_fake.fake_data).data_type = "Sentence"];
+}
+
+// This message should NOT be generated
+message Doctor {
+  string name = 1 [(gen_fake.fake_data) = { data_type: "NameWithTitle" }];
+  string specialization = 2 [(gen_fake.fake_data) = { data_type: "Profession" }];
+}

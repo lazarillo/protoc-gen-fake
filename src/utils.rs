@@ -1,11 +1,10 @@
 //! Utility functions for for parsing protoc info and generating fake data.
 
 use core::fmt;
-use prost::Message as _;
+
 use prost_reflect::{DescriptorPool, DynamicMessage, Kind as ProstFieldKind, Value};
-use prost_types::{FileDescriptorProto as ProstFileDescriptor, FileDescriptorSet};
-use protobuf::plugin::CodeGeneratorRequest;
-use protobuf::{Message as _, descriptor::DescriptorProto, descriptor::FileDescriptorProto};
+use prost_types::compiler::CodeGeneratorRequest;
+use prost_types::{DescriptorProto, FileDescriptorProto, FileDescriptorSet};
 use rand::prelude::IndexedRandom;
 use std::collections::HashSet;
 use std::io::{self};
@@ -231,14 +230,6 @@ pub fn parse_request_parameters(
                                 output_format
                             );
                         }
-                        // val if val.starts_with("json") => {
-                        //     output_format = DesiredOutputFormat::Json;
-                        //     log::debug!(
-                        //         "Parameter '{}' found, output format set to: {}",
-                        //         param,
-                        //         output_format
-                        //     );
-                        // }
                         _ => {
                             log::warn!(
                                 "Unrecognized output format '{}', defaulting to '{}'",
@@ -312,7 +303,6 @@ pub fn parse_request_parameters(
             output_encoding
         );
     }
-    // (output_format.to_string(), output_path)
     (
         output_format,
         output_path,
@@ -333,18 +323,12 @@ pub fn get_key_files(request: &CodeGeneratorRequest) -> HashSet<String> {
 
 pub fn get_runtime_descriptor_pool(request: &CodeGeneratorRequest) -> DescriptorPool {
     log::debug!("Building runtime descriptor pool, including user-provided files");
+    // With prost-types, the request.proto_file is already a Vec<FileDescriptorProto>.
+    // access the field directly or via getter depending on generated code.
+    // prost-build generates public fields for these.
+
     let mut runtime_file_descriptor_set = FileDescriptorSet::default();
-    runtime_file_descriptor_set.file = request
-        .proto_file
-        .iter()
-        .map(|pb_fd| {
-            let pb_bytes = pb_fd
-                .write_to_bytes()
-                .expect("Failed to serialize protobuf::descriptor::FileDescriptorProto");
-            ProstFileDescriptor::decode(pb_bytes.as_ref())
-                .expect("Failed to decode prost_types::FileDescriptorProto")
-        })
-        .collect();
+    runtime_file_descriptor_set.file = request.proto_file.clone();
 
     let runtime_descriptor_pool =
         DescriptorPool::from_file_descriptor_set(runtime_file_descriptor_set)
@@ -406,8 +390,7 @@ pub fn get_fake_data_output_value(
                 log::info!("Processing Enum: {}", enum_descr.full_name());
                 if possible_value.is_none() {
                     let mut rng = rand::rng();
-                    // Filter out the common "_UNSPECIFIED" value at index 0 if it exists
-                    let values: Vec<_> = enum_descr.values().filter(|v| v.number() != 0).collect();
+                    let values: Vec<_> = enum_descr.values().collect();
                     if let Some(random_value) = values.choose(&mut rng) {
                         log::info!(
                             "    Randomly selected enum value for '{}': '{}'",
@@ -496,11 +479,10 @@ mod utils_tests {
         parameter: Option<&str>,
         files_to_generate: &[&str],
     ) -> CodeGeneratorRequest {
-        let mut request = CodeGeneratorRequest::new();
+        let mut request = CodeGeneratorRequest::default(); // prost messages impl Default
         if let Some(param_str) = parameter {
-            request.set_parameter(param_str.to_string());
+            request.parameter = Some(param_str.to_string());
         }
-        // Corrected: Directly assign to the `file_to_generate` field, which is a Vec<String>.
         request.file_to_generate = files_to_generate.iter().map(|&s| s.to_string()).collect();
         request
     }
@@ -546,8 +528,6 @@ mod utils_tests {
     fn test_parse_request_parameters_all_options() {
         let request = create_mock_request(Some("format=json,output_path=/tmp/out"), &[]);
         let (format, path, language, force_language, encoding) = parse_request_parameters(&request);
-        // assert_eq!(format, DesiredOutputFormat::Json);
-        // Since JSON is no longer supported, it falls back to default Protobuf
         assert_eq!(format, DesiredOutputFormat::Protobuf);
         assert_eq!(path, PathBuf::from("/tmp/out"));
         assert_eq!(language, SupportedLanguage::Default);
@@ -580,8 +560,6 @@ mod utils_tests {
         // Unrecognized parameters should be ignored, and defaults should apply
         let request = create_mock_request(Some("unknown=value,format=json"), &[]);
         let (format, path, language, force_language, encoding) = parse_request_parameters(&request);
-        // assert_eq!(format, DesiredOutputFormat::Json);
-        // Since JSON is no longer supported, it falls back to default Protobuf
         assert_eq!(format, DesiredOutputFormat::Protobuf);
         assert_eq!(path, PathBuf::from("."));
         assert_eq!(language, SupportedLanguage::Default);
@@ -610,8 +588,7 @@ mod utils_tests {
         );
         match output {
             DataType::Protobuf(value) => {
-                // Removed assert!(value.is_i32()); as it doesn't exist
-                let age = value.as_i32().unwrap(); // Directly unwrap the Option<i32>
+                let age = value.as_i32().unwrap();
                 assert!(age >= 8 && age <= 90);
             }
         }
@@ -630,7 +607,6 @@ mod utils_tests {
             DataType::Protobuf(value) => {
                 assert!(value.as_list().is_some());
                 let list = value.as_list().unwrap();
-                // assert!(!list.is_empty());
                 assert!(list.len() <= 10);
                 for item in list {
                     assert!(item.as_str().is_some());
