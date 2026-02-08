@@ -7,10 +7,10 @@ import "gen_fake/fake_field.proto";
 option go_package = "example/common";
 
 message Address {
-  string street = 1 [(gen_fake.fake_data) = { data_type: "StreetName" }];
-  string city = 2 [(gen_fake.fake_data) = { data_type: "CityName" }];
-  string state = 3 [(gen_fake.fake_data) = { data_type: "StateName" }];
-  string zip_code = 4 [(gen_fake.fake_data) = { data_type: "ZipCode" }];
+  string street = 1 [(gen_fake.fake_data).data_type = "StreetName"];
+  string city = 2 [(gen_fake.fake_data).data_type = "CityName"];
+  string state = 3 [(gen_fake.fake_data).data_type = "StateName"];
+  string zip_code = 4 [(gen_fake.fake_data).data_type = "ZipCode"];
 }
 
 enum BloodType {
@@ -26,20 +26,23 @@ enum BloodType {
 }
 
 message Vitals {
-  int32 heart_rate = 1 [(gen_fake.fake_data) = { data_type: "Integer", min_count: 60, max_count: 100 }];
-  int32 systolic_bp = 2 [(gen_fake.fake_data) = { data_type: "Integer", min_count: 90, max_count: 140 }];
-  int32 diastolic_bp = 3 [(gen_fake.fake_data) = { data_type: "Integer", min_count: 60, max_count: 90 }];
-  float temperature_c = 4 [(gen_fake.fake_data) = { data_type: "Decimal", min_count: 36, max_count: 38 }];
+  int32 heart_rate = 1 [(gen_fake.fake_data).data_type = "Integer"];
+  int32 systolic_bp = 2 [(gen_fake.fake_data).data_type = "Integer"];
+  int32 diastolic_bp = 3 [(gen_fake.fake_data).data_type = "Integer"];
+  float temperature_c = 4 [(gen_fake.fake_data).data_type = "Decimal"];
 }
 
 message Avatar {
   oneof kind {
-    string url = 1 [(gen_fake.fake_data) = { data_type: "Image" }];
-    string base64_data = 2 [(gen_fake.fake_data) = { data_type: "Word" }]; // Just random wood for base64 simulation
-    string emoji = 3 [(gen_fake.fake_data) = { data_type: "Word" }];
+    string url = 1 [(gen_fake.fake_data).data_type = "Image"];
+    string base64_data = 2 [(gen_fake.fake_data).data_type = "Word"]; // Just random word for base64 simulation
+    string emoji = 3 [(gen_fake.fake_data).data_type = "Word"];
   }
 }
 
 message CustomDetails {
-  map<string, string> properties = 1 [(gen_fake.fake_data) = { min_count: 2, max_count: 5 }];
+  map<string, string> properties = 1 [(gen_fake.fake_data) = {
+    min_count: 2
+    max_count: 5
+  }];
 }

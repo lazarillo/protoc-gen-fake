@@ -25,11 +25,14 @@ message PatientRecord {
   
   examples.common.Address home_address = 5;
   
-  repeated examples.common.Vitals daily_vitals = 6 [(gen_fake.fake_data) = {min_count: 3, max_count: 7}];
+  repeated examples.common.Vitals daily_vitals = 6 [(gen_fake.fake_data) = {
+    min_count: 3
+    max_count: 7
+  }];
 
   examples.common.CustomDetails custom_details = 8 [(gen_fake.fake_data) = {}];
 
-  string notes = 7 [(gen_fake.fake_data) = { data_type: "Sentence" }];
+  string notes = 7 [(gen_fake.fake_data).data_type = "Sentence"];
 }
 
 // This message should NOT be generated

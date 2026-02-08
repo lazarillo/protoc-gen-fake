@@ -390,6 +390,16 @@ fn generate_fake_message_field(
             let min_count = max(min_c, 0);
             let max_count = max(max_c, max(min_count, 1));
 
+            // Validation: Warn if min/max count > 1 for singular fields
+            if !field_descr.is_list() && !field_descr.is_map() && (min_count > 1 || max_count > 1) {
+                log::warn!(
+                    "Field '{}' is singular but has min_count={} or max_count={}. These options are ignored for singular fields.",
+                    field_descr.full_name(),
+                    min_count,
+                    max_count
+                );
+            }
+
             match field_kind {
                 prost_reflect::Kind::Message(ref nested_msg_descr) => {
                     // Recursion
