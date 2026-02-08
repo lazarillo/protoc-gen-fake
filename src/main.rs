@@ -11,7 +11,6 @@ use prost_reflect::{
 
 use prost_types::compiler::{CodeGeneratorRequest, CodeGeneratorResponse};
 use rand::Rng;
-use rand::seq::IndexedRandom;
 use std::cmp::max;
 use std::collections::{HashMap, HashSet};
 
@@ -273,9 +272,21 @@ fn generate_fake_message_field(
     for oneof in message_descr.oneofs() {
         // Collect all fields in this oneof
         let fields: Vec<prost_reflect::FieldDescriptor> = oneof.fields().collect();
-        // Pick one randomly
-        if let Some(chosen) = fields.choose(rng) {
-            active_oneof_fields.insert(chosen.full_name().to_string());
+
+        // Pick one randomly, OR none.
+        // If there are N fields, we want N+1 possibilities (N fields + 1 unset case).
+        // This gives a 1/(N+1) chance for the oneof to be completely unset.
+        let n = fields.len();
+        let idx = rng.random_range(0..=n); // 0 to n inclusive (n+1 options)
+
+        if idx < n {
+            active_oneof_fields.insert(fields[idx].full_name().to_string());
+        } else {
+            log::debug!(
+                "Oneof '{}' selected to be UNSET (idx={})",
+                oneof.name(),
+                idx
+            );
         }
     }
 

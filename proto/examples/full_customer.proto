@@ -10,6 +10,7 @@ message Customer {
   option (gen_fake.fake_msg).include = true;
   string id = 1 [(gen_fake.fake_data) = {
     data_type: "UUID"
+    // Ensure that the ID is always present, so min_count is 1.
     min_count: 1
   }];
   string given_name = 2 [(gen_fake.fake_data) = {
@@ -48,6 +49,7 @@ message Phone {
     min_count: 1
   }];
   PhoneType type = 2 [(gen_fake.fake_data).min_count = 1];
+  // Phone type, such as "Mobile", "Home", "Work", etc.
   enum PhoneType {
     PHONE_TYPE_UNSPECIFIED = 0;
     MOBILE = 1;

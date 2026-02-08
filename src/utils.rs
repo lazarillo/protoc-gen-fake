@@ -390,8 +390,7 @@ pub fn get_fake_data_output_value(
                 log::info!("Processing Enum: {}", enum_descr.full_name());
                 if possible_value.is_none() {
                     let mut rng = rand::rng();
-                    // Filter out the common "_UNSPECIFIED" value at index 0 if it exists
-                    let values: Vec<_> = enum_descr.values().filter(|v| v.number() != 0).collect();
+                    let values: Vec<_> = enum_descr.values().collect();
                     if let Some(random_value) = values.choose(&mut rng) {
                         log::info!(
                             "    Randomly selected enum value for '{}': '{}'",
